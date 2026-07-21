@@ -88,11 +88,15 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
       const rowList = r ?? [];
       setRows(rowList);
 
-      const licenseNums = rowList.map((x) => x.license_number).filter(Boolean);
-      if (licenseNums.length > 0) {
-        const { data: enr } = await supabase.from("enrichments").select("*").in("license_number", licenseNums);
+      const licenseNums = new Set(rowList.map((x) => (x.license_number || "").trim()).filter(Boolean));
+      if (licenseNums.size > 0) {
+        const { data: enr, error: enrErr } = await supabase.from("enrichments").select("*");
+        if (enrErr) console.error("Enrichments fetch failed:", enrErr);
         const map: Record<string, EnrichmentRecord> = {};
-        (enr ?? []).forEach((e) => { map[e.license_number] = e as EnrichmentRecord; });
+        (enr ?? []).forEach((e) => {
+          const key = (e.license_number || "").trim();
+          if (licenseNums.has(key)) map[key] = e as EnrichmentRecord;
+        });
         setEnrichments(map);
       }
 
@@ -118,11 +122,15 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
   useEffect(() => { load(); }, [id]);
 
   const refreshEnrichmentsOnly = async () => {
-    const licenseNums = rows.map((x) => x.license_number).filter(Boolean);
-    if (licenseNums.length === 0) return;
-    const { data: enr } = await supabase.from("enrichments").select("*").in("license_number", licenseNums);
+    const licenseNums = new Set(rows.map((x) => (x.license_number || "").trim()).filter(Boolean));
+    if (licenseNums.size === 0) return;
+    const { data: enr, error: enrErr } = await supabase.from("enrichments").select("*");
+    if (enrErr) console.error("Enrichments refresh failed:", enrErr);
     const map: Record<string, EnrichmentRecord> = {};
-    (enr ?? []).forEach((e) => { map[e.license_number] = e as EnrichmentRecord; });
+    (enr ?? []).forEach((e) => {
+      const key = (e.license_number || "").trim();
+      if (licenseNums.has(key)) map[key] = e as EnrichmentRecord;
+    });
     setEnrichments(map);
   };
 
@@ -187,7 +195,7 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
     setBusyId(row.id);
     setBusyStage("Starting...");
     try {
-      const existing = enrichments[row.license_number];
+      const existing = enrichments[(row.license_number || "").trim()];
       const forceRefresh = !!(existing && existing.matched_title);
       const result = await enrichRow(enrichableData(row), { forceRefresh, onProgress: (stage) => setBusyStage(stage) });
       await supabase.from("pipeline_rows").update({ enrichment_status: result.status }).eq("id", row.id);
@@ -290,7 +298,7 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
                 <tbody>
                   {rows.map((r) => {
                     const d = r.row_data;
-                    const enr = enrichments[r.license_number];
+                    const enr = enrichments[(r.license_number || "").trim()];
                     const status = enr?.status || "pending";
                     const style = STATUS_STYLE[status] || STATUS_STYLE.pending;
                     const isBusy = busyId === r.id;
