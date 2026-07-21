@@ -423,9 +423,9 @@ export async function enrichRowNppes(row: Row, options?: { onProgress?: Progress
 
   progress(`Searching NPPES registry for ${first} ${last} (${stateCode})...`);
 
-  const url = `https://npiregistry.cms.hhs.gov/api/?version=2.1&first_name=${encodeURIComponent(first)}&last_name=${encodeURIComponent(last)}&state=${encodeURIComponent(stateCode)}&limit=10`;
+  const url = `/api/nppes?first=${encodeURIComponent(first)}&last=${encodeURIComponent(last)}&state=${encodeURIComponent(stateCode)}`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`NPPES API failed (${res.status})`);
+  if (!res.ok) throw new Error(`NPPES lookup failed (${res.status})`);
   const data = (await res.json()) as { result_count?: number; results?: NpiResult[] };
   const results = data.results || [];
 
