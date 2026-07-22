@@ -6,7 +6,7 @@ import Link from "next/link";
 import Papa from "papaparse";
 import { supabase } from "@/app/lib/supabase";
 import BrandLoader from "@/app/components/BrandLoader";
-
+import { useAuth } from "@/app/lib/useAuth";
 const SHEET_ID = "1GfcUmQWXdi9Z-LMEdahn63XhFrzK1Pxi";
 const TAB_NAME = "Candidate Queue";
 const PAGE_SIZE = 50;
@@ -111,9 +111,7 @@ export default function CandidatesPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (localStorage.getItem("loggedIn") !== "true") router.push("/");
-  }, [router]);
+  const { checking } = useAuth();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -213,7 +211,7 @@ export default function CandidatesPage() {
       setSaveError(e instanceof Error ? e.message : "Failed to save pipeline");
     } finally { setSaving(false); }
   };
-
+if (checking) return <div className="min-h-screen flex items-center justify-center bg-zinc-50"><BrandLoader label="Loading..." /></div>;
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50">
       <header className="flex justify-between items-center px-6 py-4 border-b border-zinc-200 bg-white">

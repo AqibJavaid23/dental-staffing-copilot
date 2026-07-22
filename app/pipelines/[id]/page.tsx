@@ -6,7 +6,7 @@ import Link from "next/link";
 import { supabase } from "@/app/lib/supabase";
 import { enrichRow, smartSearchRescue, enrichRowNppes, checkRowInputQuality, type EnrichmentRecord } from "@/app/lib/enrich";
 import BrandLoader from "@/app/components/BrandLoader";
-
+import { useAuth } from "@/app/lib/useAuth";
 type PipelineRow = {
   id: string;
   license_number: string;
@@ -72,9 +72,7 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
   const [logNote, setLogNote] = useState("");
   const [savingLog, setSavingLog] = useState(false);
 
-  useEffect(() => {
-    if (localStorage.getItem("loggedIn") !== "true") router.push("/");
-  }, [router]);
+  const { checking } = useAuth();
 
   const load = async () => {
     setLoading(true); setError(null);
@@ -250,7 +248,7 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
     ...s,
     count: rows.filter((r) => (r.outreach_status || "to_contact") === s.value).length,
   })).filter((s) => s.count > 0);
-
+if (checking) return <div className="min-h-screen flex items-center justify-center bg-zinc-50"><BrandLoader label="Loading..." /></div>;
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50">
       <header className="flex justify-between items-center px-6 py-4 border-b border-zinc-200 bg-white">

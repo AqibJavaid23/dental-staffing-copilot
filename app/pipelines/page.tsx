@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/app/lib/supabase";
 import BrandLoader from "@/app/components/BrandLoader";
+import { useAuth } from "@/app/lib/useAuth";
 type Pipeline = {
   id: string;
   name: string;
@@ -29,9 +30,7 @@ function PipelinesInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (localStorage.getItem("loggedIn") !== "true") router.push("/");
-  }, [router]);
+  const { checking } = useAuth();
 
   const load = async () => {
     setLoading(true); setError(null);
@@ -70,7 +69,7 @@ function PipelinesInner() {
   const backLabel = projectFilter ? `← Back to ${projectFilter}` : "← Back";
   const emptyLink = "/dashboard/provider-database";
   const emptyLabel = "Go to Provider Database";
-
+if (checking) return <div className="min-h-screen flex items-center justify-center bg-zinc-50"><BrandLoader label="Loading..." /></div>;
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50 dark:bg-zinc-900">
       <header className="flex justify-between items-center px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">

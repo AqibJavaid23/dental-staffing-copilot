@@ -6,6 +6,7 @@ import Link from "next/link";
 import Papa from "papaparse";
 import { supabase } from "@/app/lib/supabase";
 import BrandLoader from "@/app/components/BrandLoader";
+import { useAuth } from "@/app/lib/useAuth";
 const SHEET_ID = "1kBmiJhXgM2UHJTxtctMxs4puCuHdQ1eKgk8JLb9FPCM";
 const TABS = [
   { label: "Dentist", gid: "2097790243" },
@@ -98,9 +99,7 @@ export default function ProviderDatabasePage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (localStorage.getItem("loggedIn") !== "true") router.push("/");
-  }, [router]);
+  const { checking } = useAuth();
 
   useEffect(() => {
     const fetchTab = async (label: TabLabel, gid: string) => {
@@ -227,7 +226,7 @@ export default function ProviderDatabasePage() {
       setSaving(false);
     }
   };
-
+if (checking) return <div className="min-h-screen flex items-center justify-center bg-zinc-50"><BrandLoader label="Loading..." /></div>;
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50 dark:bg-zinc-900">
       <header className="flex justify-between items-center px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">

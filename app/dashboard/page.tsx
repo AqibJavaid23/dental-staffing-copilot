@@ -1,20 +1,20 @@
 "use client";
 
-import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useAuth, signOut } from "@/app/lib/useAuth";
+import BrandLoader from "@/app/components/BrandLoader";
 
 export default function Dashboard() {
   const router = useRouter();
+  const { profile, checking } = useAuth();
 
-  useEffect(() => {
-    if (localStorage.getItem("loggedIn") !== "true") router.push("/");
-  }, [router]);
-
-  const handleLogout = () => {
-    localStorage.removeItem("loggedIn");
+  const handleLogout = async () => {
+    await signOut();
     router.push("/");
   };
+
+  if (checking) return <div className="min-h-screen flex items-center justify-center bg-zinc-50"><BrandLoader label="Loading..." /></div>;
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50">

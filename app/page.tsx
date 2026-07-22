@@ -2,28 +2,36 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-
-// 👇 Change these to whatever username/password you want
-const USERNAME = "charles";
-const PASSWORD = "1234";
+import { supabase } from "@/app/lib/supabase";
 
 export default function Home() {
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const [splash, setSplash] = useState(false);
   const router = useRouter();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (username === USERNAME && password === PASSWORD) {
-      localStorage.setItem("loggedIn", "true");
-      setSplash(true);
-      router.prefetch("/dashboard");
-      setTimeout(() => router.push("/dashboard"), 1500);
-    } else {
-      setError("Invalid username or password");
+    setError("");
+    setLoading(true);
+
+    const { data, error: authError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+
+    if (authError || !data.session) {
+      setError(authError?.message || "Invalid email or password");
+      setLoading(false);
+      return;
     }
+
+    // Success — show splash, then go to dashboard
+    setSplash(true);
+    router.prefetch("/dashboard");
+    setTimeout(() => router.push("/dashboard"), 1500);
   };
 
   return (
@@ -47,11 +55,11 @@ export default function Home() {
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-zinc-700 mb-1">Username</label>
+            <label className="block text-sm font-medium text-zinc-700 mb-1">Email</label>
             <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               className="w-full px-3 py-2 border border-zinc-300 rounded-lg bg-white text-zinc-900 focus:outline-none focus:ring-2"
               style={{ ["--tw-ring-color" as string]: "var(--brand-blue)" }}
               required
@@ -74,10 +82,11 @@ export default function Home() {
 
         <button
           type="submit"
-          className="w-full py-2.5 text-white font-medium rounded-lg hover:opacity-90 transition"
+          disabled={loading}
+          className="w-full py-2.5 text-white font-medium rounded-lg hover:opacity-90 transition disabled:opacity-60 disabled:cursor-not-allowed"
           style={{ backgroundColor: "var(--brand-blue)" }}
         >
-          Sign in
+          {loading ? "Signing in..." : "Sign in"}
         </button>
       </form>
 
