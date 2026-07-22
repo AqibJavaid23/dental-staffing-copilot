@@ -27,12 +27,17 @@ export default function Dashboard() {
             <span className="font-medium" style={{ color: "var(--brand-blue)" }}>CO-PILOT</span>
           </h1>
         </div>
-        <button
-          onClick={handleLogout}
-          className="text-sm text-zinc-500 hover:text-zinc-900 transition"
-        >
-          Sign out
-        </button>
+        <div className="flex items-center gap-4">
+          {profile && profile.role !== "member" && (
+            <Link href="/team" className="text-sm font-medium" style={{ color: "var(--brand-blue)" }}>Team</Link>
+          )}
+          <button
+            onClick={handleLogout}
+            className="text-sm text-zinc-500 hover:text-zinc-900 transition"
+          >
+            Sign out
+          </button>
+        </div>
       </header>
 
       <main className="flex-1 flex items-center justify-center p-6">
