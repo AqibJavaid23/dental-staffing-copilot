@@ -104,7 +104,7 @@ export async function DELETE(req: NextRequest) {
   }
 
   const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ error: error.message || "Delete failed (user may own data)" }, { status: 500 });
   // profile row auto-deletes via the cascade on auth.users
   return NextResponse.json({ ok: true });
 }

@@ -74,7 +74,7 @@ export default function TeamPage() {
   const changeRole = async (userId: string, role: string) => {
     const res = await fetch("/api/team", { method: "PATCH", headers: await authHeader(), body: JSON.stringify({ userId, role }) });
     const json = await res.json();
-    if (!res.ok) { alert(json.error || "Failed"); return; }
+    if (!res.ok) { alert(json.error || `Remove failed (status ${res.status})`); return; }
     loadUsers();
   };
 
@@ -82,7 +82,7 @@ export default function TeamPage() {
     if (!confirm(`Remove ${email}? They will lose access immediately.`)) return;
     const res = await fetch("/api/team", { method: "DELETE", headers: await authHeader(), body: JSON.stringify({ userId }) });
     const json = await res.json();
-    if (!res.ok) { alert(json.error || "Failed"); return; }
+    if (!res.ok) { alert(json.error || `Remove failed (status ${res.status})`); return; }
     loadUsers();
   };
 
