@@ -30,13 +30,31 @@ function PipelinesInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { checking } = useAuth();
+  const { profile, checking } = useAuth();
 
   const load = async () => {
+    if (!profile) return;
     setLoading(true); setError(null);
     try {
       let query = supabase.from("pipelines").select("*").order("created_at", { ascending: false });
       if (projectFilter) query = query.eq("project", projectFilter);
+
+      // Role-based visibility
+      if (profile.role === "member") {
+        // Members see only their own
+        query = query.eq("owner_id", profile.id);
+      } else if (profile.role === "manager") {
+        // Managers see their own + all Members' pipelines
+        const { data: members } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("role", "member");
+        const memberIds = (members ?? []).map((m) => m.id);
+        const visibleIds = [profile.id, ...memberIds];
+        query = query.in("owner_id", visibleIds);
+      }
+      // Admin: no filter — sees everything
+
       const { data: pipes, error: pErr } = await query;
       if (pErr) throw pErr;
 
@@ -55,7 +73,7 @@ function PipelinesInner() {
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, [projectFilter]);
+  useEffect(() => { if (profile) load(); }, [projectFilter, profile]);
 
   const deletePipeline = async (id: string, name: string) => {
     if (!confirm(`Delete pipeline "${name}"? This cannot be undone.`)) return;
@@ -64,7 +82,10 @@ function PipelinesInner() {
     load();
   };
 
-  const title = projectFilter ? `${projectFilter} Pipelines` : "My Pipelines";
+  const title =
+    profile?.role === "admin" ? "All Pipelines (Admin)"
+    : profile?.role === "manager" ? "Team Pipelines"
+    : "My Pipelines";
   const backHref = "/dashboard";
   const backLabel = projectFilter ? `← Back to ${projectFilter}` : "← Back";
   const emptyLink = "/dashboard/provider-database";
