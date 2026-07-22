@@ -183,9 +183,10 @@ export default function CandidatesPage() {
     if (!trimmedName) { setSaveError("Please enter a name"); return; }
     setSaving(true); setSaveError(null);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
       const { data: pipeline, error: pErr } = await supabase
         .from("pipelines")
-        .insert({ name: trimmedName, source_tab: "Candidate", project: "DSCP" })
+        .insert({ name: trimmedName, source_tab: "Candidate", project: "DSCP", owner_id: session?.user.id })
         .select()
         .single();
       if (pErr) throw pErr;

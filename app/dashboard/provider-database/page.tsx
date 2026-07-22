@@ -199,9 +199,10 @@ export default function ProviderDatabasePage() {
 
       for (const tab of tabs) {
         const finalName = suffix ? trimmedName + suffix.replace("%TAB%", tab) : trimmedName;
+        const { data: { session } } = await supabase.auth.getSession();
         const { data: pipeline, error: pErr } = await supabase
           .from("pipelines")
-          .insert({ name: finalName, source_tab: tab, project: "DSCP" })
+          .insert({ name: finalName, source_tab: tab, project: "DSCP", owner_id: session?.user.id })
           .select()
           .single();
         if (pErr) throw pErr;
