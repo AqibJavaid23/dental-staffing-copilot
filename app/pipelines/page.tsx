@@ -30,6 +30,10 @@ function PipelinesInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Phase F: "view as user" picker
+  const [viewableUsers, setViewableUsers] = useState<{ id: string; label: string; role: string }[]>([]);
+  const [viewUserId, setViewUserId] = useState<string>("all");
+
   const { profile, checking } = useAuth();
 
   const load = async () => {
@@ -43,8 +47,11 @@ function PipelinesInner() {
       if (profile.role === "member") {
         // Members see only their own
         query = query.eq("owner_id", profile.id);
+      } else if (viewUserId !== "all") {
+        // Admin/Manager focused on one specific person
+        query = query.eq("owner_id", viewUserId);
       } else if (profile.role === "manager") {
-        // Managers see their own + all Members' pipelines
+        // Manager, viewing everyone they're allowed to: own + all Members
         const { data: members } = await supabase
           .from("profiles")
           .select("id")
@@ -53,7 +60,7 @@ function PipelinesInner() {
         const visibleIds = [profile.id, ...memberIds];
         query = query.in("owner_id", visibleIds);
       }
-      // Admin: no filter — sees everything
+      // Admin viewing "all": no filter — sees everything
 
       const { data: pipes, error: pErr } = await query;
       if (pErr) throw pErr;
@@ -73,8 +80,34 @@ function PipelinesInner() {
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { if (profile) load(); }, [projectFilter, profile]);
+  useEffect(() => { if (profile) load(); }, [projectFilter, profile, viewUserId]);
+// Load the list of users this person is allowed to "view as"
+  useEffect(() => {
+    if (!profile) return;
+    if (profile.role === "member") return; // members don't get the picker
 
+    const loadUsers = async () => {
+      let q = supabase.from("profiles").select("id, email, full_name, role");
+      if (profile.role === "manager") {
+        // Manager can view themselves + members
+        q = q.in("role", ["member", "manager"]);
+      }
+      // Admin: all profiles
+      const { data } = await q;
+      let list = (data ?? []).map((u) => ({
+        id: u.id,
+        label: (u.full_name || u.email || "Unknown") + (u.id === profile.id ? " (me)" : ""),
+        role: u.role,
+      }));
+      // Manager shouldn't see OTHER managers in the picker — only self + members
+      if (profile.role === "manager") {
+        list = list.filter((u) => u.role === "member" || u.id === profile.id);
+      }
+      list.sort((a, b) => a.label.localeCompare(b.label));
+      setViewableUsers(list);
+    };
+    loadUsers();
+  }, [profile]);
   const deletePipeline = async (id: string, name: string) => {
     if (!confirm(`Delete pipeline "${name}"? This cannot be undone.`)) return;
     const { error } = await supabase.from("pipelines").delete().eq("id", id);
@@ -96,7 +129,21 @@ if (checking) return <div className="min-h-screen flex items-center justify-cent
       <header className="flex justify-between items-center px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
         <Link href={backHref} className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-50 transition">{backLabel}</Link>
         <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">{title}</h1>
-        <div className="w-24" />
+        <div className="w-48 flex justify-end">
+          {profile && profile.role !== "member" && viewableUsers.length > 0 && (
+            <select
+              value={viewUserId}
+              onChange={(e) => setViewUserId(e.target.value)}
+              className="text-xs border border-zinc-300 dark:border-zinc-600 rounded-lg px-2 py-1.5 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              title="View pipelines for a specific person"
+            >
+              <option value="all">Everyone</option>
+              {viewableUsers.map((u) => (
+                <option key={u.id} value={u.id}>{u.label}</option>
+              ))}
+            </select>
+          )}
+        </div>
       </header>
 
       <main className="flex-1 p-6">
