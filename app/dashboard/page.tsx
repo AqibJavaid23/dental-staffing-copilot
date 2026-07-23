@@ -47,7 +47,7 @@ export default function Dashboard() {
             <p className="text-zinc-500 mt-2">Find providers, build pipelines, run outreach.</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <Link href="/dashboard/provider-database" className="group card-hover bg-white rounded-2xl p-8 shadow-sm border border-zinc-200">
               <div className="flex flex-col items-start space-y-3">
                 <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl" style={{ backgroundColor: "rgba(0, 128, 208, 0.1)" }}>🦷</div>
@@ -61,6 +61,14 @@ export default function Dashboard() {
                 <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl" style={{ backgroundColor: "rgba(0, 128, 208, 0.1)" }}>🎯</div>
                 <h3 className="text-xl font-semibold" style={{ color: "var(--brand-navy)" }}>Candidate Queue</h3>
                 <p className="text-sm text-zinc-500">Researched candidates — owners vs. associates, confidence, and social profiles.</p>
+                <span className="text-sm font-medium group-hover:translate-x-1 transition inline-block" style={{ color: "var(--brand-blue)" }}>Open →</span>
+              </div>
+            </Link>
+           <Link href="/dashboard/my-data" className="group card-hover bg-white rounded-2xl p-8 shadow-sm border border-zinc-200">
+              <div className="flex flex-col items-start space-y-3">
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl" style={{ backgroundColor: "rgba(0, 128, 208, 0.1)" }}>📤</div>
+                <h3 className="text-xl font-semibold" style={{ color: "var(--brand-navy)" }}>My Data</h3>
+                <p className="text-sm text-zinc-500">Upload your own lists and send them to pipelines for enrichment.</p>
                 <span className="text-sm font-medium group-hover:translate-x-1 transition inline-block" style={{ color: "var(--brand-blue)" }}>Open →</span>
               </div>
             </Link>
