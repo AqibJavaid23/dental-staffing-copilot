@@ -11,17 +11,24 @@ import BrandLoader from "@/app/components/BrandLoader";
 
 const ROW_LIMIT = 5000;
 const PAGE_SIZE = 50;
+const EXPECTED = ["First Name", "Last Name", "Business Name", "City", "State", "License Number"];
 
 type UploadRow = {
   id: string;
   owner_id: string;
+  batch_id: string | null;
   batch_name: string | null;
   row_data: Record<string, string>;
   created_at: string;
 };
 
-// Columns we expect (same as Provider Database)
-const EXPECTED = ["First Name", "Last Name", "Business Name", "City", "State", "License Number"];
+type Batch = {
+  batchId: string;
+  name: string;
+  ownerId: string;
+  count: number;
+  createdAt: string;
+};
 
 export default function MyDataPage() {
   const router = useRouter();
@@ -31,16 +38,15 @@ export default function MyDataPage() {
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
+
+  const [openBatchId, setOpenBatchId] = useState<string | null>(null); // null = batch list; else drill-in
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Record<string, UploadRow>>({});
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [pipelineName, setPipelineName] = useState("");
   const [saving, setSaving] = useState(false);
-  const [ownerFilter, setOwnerFilter] = useState<string>("all");
-  const [owners, setOwners] = useState<{ id: string; label: string }[]>([]);
 
-  // Load uploads (role-based visibility)
   const load = useCallback(async () => {
     if (!profile) return;
     setLoading(true); setError(null);
@@ -53,7 +59,6 @@ export default function MyDataPage() {
         const ids = [profile.id, ...(members ?? []).map((m) => m.id)];
         query = query.in("owner_id", ids);
       }
-      // admin: all
       const { data, error: e } = await query;
       if (e) throw e;
       setRows((data ?? []) as UploadRow[]);
@@ -64,98 +69,106 @@ export default function MyDataPage() {
 
   useEffect(() => { if (profile) load(); }, [profile, load]);
 
-  // Build owner filter options for managers/admins
-  useEffect(() => {
-    if (!profile || profile.role === "member") return;
-    const build = async () => {
-      const { data } = await supabase.from("profiles").select("id, email, full_name, role");
-      let list = (data ?? []).map((u) => ({ id: u.id, label: (u.full_name || u.email) + (u.id === profile.id ? " (me)" : ""), role: u.role }));
-      if (profile.role === "manager") list = list.filter((u) => u.role === "member" || u.id === profile.id);
-      setOwners(list.map(({ id, label }) => ({ id, label })));
-    };
-    build();
-  }, [profile]);
-
-  // How many rows this user already has (for the limit)
   const myRowCount = useMemo(
     () => (profile ? rows.filter((r) => r.owner_id === profile.id).length : 0),
     [rows, profile]
   );
+
+  // Group rows into batches
+  const batches = useMemo<Batch[]>(() => {
+    const map = new Map<string, Batch>();
+    for (const r of rows) {
+      const key = r.batch_id || `legacy-${r.batch_name}-${r.owner_id}`;
+      const existing = map.get(key);
+      if (existing) {
+        existing.count++;
+      } else {
+        map.set(key, {
+          batchId: key,
+          name: r.batch_name || "Untitled",
+          ownerId: r.owner_id,
+          count: 1,
+          createdAt: r.created_at,
+        });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }, [rows]);
 
   const handleFile = async (file: File) => {
     if (!profile) return;
     setUploading(true); setUploadMsg(null);
     try {
       let parsed: Record<string, string>[] = [];
-
       if (file.name.toLowerCase().endsWith(".csv")) {
         const text = await file.text();
-        const result = Papa.parse<Record<string, string>>(text, { header: true, skipEmptyLines: true });
-        parsed = result.data;
+        parsed = Papa.parse<Record<string, string>>(text, { header: true, skipEmptyLines: true }).data;
       } else if (file.name.toLowerCase().endsWith(".xlsx") || file.name.toLowerCase().endsWith(".xls")) {
         const buf = await file.arrayBuffer();
         const wb = XLSX.read(buf, { type: "array" });
-        const sheet = wb.Sheets[wb.SheetNames[0]];
-        parsed = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { defval: "" });
+        parsed = XLSX.utils.sheet_to_json<Record<string, string>>(wb.Sheets[wb.SheetNames[0]], { defval: "" });
       } else {
         throw new Error("Please upload a .csv or .xlsx file");
       }
-
-      // Keep only rows that have at least a name or business
       parsed = parsed.filter((r) => (r["First Name"] || r["Last Name"] || r["Business Name"]));
-
       if (parsed.length === 0) throw new Error("No usable rows found. Check your column headers match the Provider Database.");
-
-      // Enforce the 5,000-row limit
       if (myRowCount + parsed.length > ROW_LIMIT) {
         throw new Error(`This upload would exceed your ${ROW_LIMIT.toLocaleString()}-row limit. You have ${myRowCount.toLocaleString()} rows; this file has ${parsed.length.toLocaleString()}.`);
       }
 
-      const batchName = file.name;
-      const records = parsed.map((r) => ({
-        owner_id: profile.id,
-        batch_name: batchName,
-        row_data: r,
-      }));
-
-      // Insert in chunks of 500 to be safe
+      const batchId = crypto.randomUUID();
+      const records = parsed.map((r) => ({ owner_id: profile.id, batch_id: batchId, batch_name: file.name, row_data: r }));
       for (let i = 0; i < records.length; i += 500) {
-        const chunk = records.slice(i, i + 500);
-        const { error: insErr } = await supabase.from("user_uploads").insert(chunk);
+        const { error: insErr } = await supabase.from("user_uploads").insert(records.slice(i, i + 500));
         if (insErr) throw insErr;
       }
-
-      setUploadMsg(`Uploaded ${parsed.length.toLocaleString()} rows from "${batchName}".`);
+      setUploadMsg(`Uploaded ${parsed.length.toLocaleString()} rows from "${file.name}".`);
       load();
     } catch (e) {
       setUploadMsg(e instanceof Error ? e.message : "Upload failed");
     } finally { setUploading(false); }
   };
 
-  // Filtering + pagination
-  const filtered = useMemo(() => {
-    let list = rows;
-    if (ownerFilter !== "all") list = list.filter((r) => r.owner_id === ownerFilter);
-    const s = search.trim().toLowerCase();
-    if (s) {
-      list = list.filter((r) => {
-        const d = r.row_data;
-        return `${d["First Name"] ?? ""} ${d["Last Name"] ?? ""} ${d["Business Name"] ?? ""} ${d["City"] ?? ""}`.toLowerCase().includes(s);
-      });
+  const deleteBatch = async (batch: Batch) => {
+    if (!profile) return;
+    if (batch.ownerId !== profile.id) { alert("You can only delete your own uploads."); return; }
+    if (!confirm(`Delete "${batch.name}" (${batch.count} rows)? This can't be undone.`)) return;
+    try {
+      // Delete by batch_id if present, else legacy fallback by name+owner
+      if (batch.batchId.startsWith("legacy-")) {
+        await supabase.from("user_uploads").delete().eq("owner_id", profile.id).eq("batch_name", batch.name).is("batch_id", null);
+      } else {
+        await supabase.from("user_uploads").delete().eq("batch_id", batch.batchId);
+      }
+      if (openBatchId === batch.batchId) setOpenBatchId(null);
+      load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Delete failed");
     }
-    return list;
-  }, [rows, search, ownerFilter]);
+  };
+
+  // Rows for the currently opened batch
+  const openBatch = batches.find((b) => b.batchId === openBatchId) || null;
+  const batchRows = useMemo(() => {
+    if (!openBatchId) return [];
+    return rows.filter((r) => (r.batch_id || `legacy-${r.batch_name}-${r.owner_id}`) === openBatchId);
+  }, [rows, openBatchId]);
+
+  const filtered = useMemo(() => {
+    const s = search.trim().toLowerCase();
+    if (!s) return batchRows;
+    return batchRows.filter((r) => {
+      const d = r.row_data;
+      return `${d["First Name"] ?? ""} ${d["Last Name"] ?? ""} ${d["Business Name"] ?? ""} ${d["City"] ?? ""}`.toLowerCase().includes(s);
+    });
+  }, [batchRows, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paged = useMemo(() => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filtered, page]);
-  useEffect(() => { setPage(1); }, [search, ownerFilter]);
+  useEffect(() => { setPage(1); }, [search, openBatchId]);
 
   const toggleRow = (r: UploadRow) => {
-    setSelected((prev) => {
-      const next = { ...prev };
-      if (next[r.id]) delete next[r.id]; else next[r.id] = r;
-      return next;
-    });
+    setSelected((prev) => { const n = { ...prev }; if (n[r.id]) delete n[r.id]; else n[r.id] = r; return n; });
   };
   const selectedCount = Object.keys(selected).length;
 
@@ -168,7 +181,6 @@ export default function MyDataPage() {
         .insert({ name: pipelineName.trim(), source_tab: "Upload", project: "DSCP", owner_id: profile.id })
         .select().single();
       if (pErr) throw pErr;
-
       const rowsToInsert = Object.values(selected).map((r) => ({
         pipeline_id: pipeline.id,
         license_number: (r.row_data["License Number"] || `UP::${r.id}`).trim(),
@@ -176,7 +188,6 @@ export default function MyDataPage() {
       }));
       const { error: rErr } = await supabase.from("pipeline_rows").insert(rowsToInsert);
       if (rErr) throw rErr;
-
       setSelected({}); setShowSaveDialog(false); setPipelineName("");
       router.push("/pipelines");
     } catch (e) {
@@ -203,78 +214,105 @@ export default function MyDataPage() {
               <span className="text-xs text-zinc-500">{myRowCount.toLocaleString()} / {ROW_LIMIT.toLocaleString()} rows used</span>
             </div>
             <p className="text-sm text-zinc-500">CSV or Excel with columns: {EXPECTED.join(", ")}.</p>
-            <input
-              type="file"
-              accept=".csv,.xlsx,.xls"
-              disabled={uploading}
+            <input type="file" accept=".csv,.xlsx,.xls" disabled={uploading}
               onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ""; }}
-              className="block text-sm text-zinc-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-600 file:text-white hover:file:bg-blue-700 file:cursor-pointer"
-            />
+              className="block text-sm text-zinc-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-600 file:text-white hover:file:bg-blue-700 file:cursor-pointer" />
             {uploading && <p className="text-sm text-blue-600">Uploading…</p>}
             {uploadMsg && <p className="text-sm text-zinc-700">{uploadMsg}</p>}
           </div>
 
-          {/* Filters */}
-          <div className="flex flex-wrap gap-3 items-center">
-            <input type="text" placeholder="Search name, business, city..." value={search} onChange={(e) => setSearch(e.target.value)} className="px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-64" />
-            {profile && profile.role !== "member" && owners.length > 0 && (
-              <select value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)} className="px-3 py-2 border border-zinc-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="all">Everyone's data</option>
-                {owners.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-              </select>
-            )}
-            <div className="ml-auto text-sm text-zinc-500">{loading ? "Loading..." : `${filtered.length.toLocaleString()} rows`}</div>
-          </div>
-
-          {/* Table */}
-          <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 overflow-hidden">
-            {error ? <div className="p-8 text-center text-red-500">{error}</div>
-            : loading ? <BrandLoader label="Loading your data..." />
-            : filtered.length === 0 ? <div className="p-12 text-center text-zinc-400">No data yet. Upload a CSV or Excel file above.</div>
-            : (
-              <div className="overflow-x-auto">
+          {/* BATCH LIST view */}
+          {!openBatchId && (
+            <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 overflow-hidden">
+              {error ? <div className="p-8 text-center text-red-500">{error}</div>
+              : loading ? <BrandLoader label="Loading your files..." />
+              : batches.length === 0 ? <div className="p-12 text-center text-zinc-400">No uploads yet. Upload a CSV or Excel file above.</div>
+              : (
                 <table className="w-full text-sm">
                   <thead className="bg-zinc-50 border-b border-zinc-200">
                     <tr>
-                      <th className="px-4 py-3 w-10"></th>
-                      <th className="text-left px-4 py-3 font-medium text-zinc-700">Name</th>
-                      <th className="text-left px-4 py-3 font-medium text-zinc-700">Business</th>
-                      <th className="text-left px-4 py-3 font-medium text-zinc-700">City</th>
-                      <th className="text-left px-4 py-3 font-medium text-zinc-700">License #</th>
-                      <th className="text-left px-4 py-3 font-medium text-zinc-700">Batch</th>
+                      <th className="text-left px-4 py-3 font-medium text-zinc-700">File</th>
+                      <th className="text-left px-4 py-3 font-medium text-zinc-700">Rows</th>
+                      <th className="text-left px-4 py-3 font-medium text-zinc-700">Uploaded</th>
+                      <th className="text-right px-4 py-3 font-medium text-zinc-700">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {paged.map((r) => {
-                      const d = r.row_data;
-                      const isSel = !!selected[r.id];
+                    {batches.map((b) => {
+                      const isMine = b.ownerId === profile?.id;
                       return (
-                        <tr key={r.id} onClick={() => toggleRow(r)} className={`border-b border-zinc-100 cursor-pointer transition ${isSel ? "bg-blue-50/50" : ""}`}>
-                          <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                            <input type="checkbox" checked={isSel} onChange={() => toggleRow(r)} className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500" />
+                        <tr key={b.batchId} className="border-b border-zinc-100 hover:bg-zinc-50 transition">
+                          <td className="px-4 py-3">
+                            <button onClick={() => setOpenBatchId(b.batchId)} className="text-blue-600 hover:underline font-medium">📄 {b.name}</button>
                           </td>
-                          <td className="px-4 py-3 text-zinc-900 whitespace-nowrap font-medium">{[d["First Name"], d["Last Name"]].filter(Boolean).join(" ") || "—"}</td>
-                          <td className="px-4 py-3 text-zinc-700">{d["Business Name"] || "—"}</td>
-                          <td className="px-4 py-3 text-zinc-700 whitespace-nowrap">{d["City"] || "—"}</td>
-                          <td className="px-4 py-3 text-zinc-700 font-mono text-xs whitespace-nowrap">{d["License Number"] || "—"}</td>
-                          <td className="px-4 py-3 text-zinc-400 text-xs truncate max-w-[160px]" title={r.batch_name || ""}>{r.batch_name || "—"}</td>
+                          <td className="px-4 py-3 text-zinc-700">{b.count.toLocaleString()}</td>
+                          <td className="px-4 py-3 text-zinc-500 text-xs">{new Date(b.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</td>
+                          <td className="px-4 py-3 text-right">
+                            <button onClick={() => setOpenBatchId(b.batchId)} className="text-xs text-zinc-600 hover:text-zinc-900 mr-3">Open</button>
+                            {isMine && <button onClick={() => deleteBatch(b)} className="text-xs text-zinc-500 hover:text-red-500 transition">Delete</button>}
+                          </td>
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
-              </div>
-            )}
-          </div>
-
-          {!loading && filtered.length > PAGE_SIZE && (
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-zinc-500">Page {page} of {totalPages}</div>
-              <div className="flex gap-2">
-                <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="px-3 py-1.5 text-sm border border-zinc-300 rounded-lg bg-white text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition">Previous</button>
-                <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="px-3 py-1.5 text-sm border border-zinc-300 rounded-lg bg-white text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition">Next</button>
-              </div>
+              )}
             </div>
+          )}
+
+          {/* DRILL-IN: rows of one batch */}
+          {openBatchId && openBatch && (
+            <>
+              <div className="flex items-center gap-3">
+                <button onClick={() => { setOpenBatchId(null); setSearch(""); }} className="text-sm text-zinc-500 hover:text-zinc-900 transition">← All files</button>
+                <span className="text-sm font-medium text-zinc-900">📄 {openBatch.name}</span>
+                <span className="text-xs text-zinc-400">{openBatch.count.toLocaleString()} rows</span>
+                <input type="text" placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="ml-auto px-3 py-1.5 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-56" />
+              </div>
+
+              <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-zinc-50 border-b border-zinc-200">
+                      <tr>
+                        <th className="px-4 py-3 w-10"></th>
+                        <th className="text-left px-4 py-3 font-medium text-zinc-700">Name</th>
+                        <th className="text-left px-4 py-3 font-medium text-zinc-700">Business</th>
+                        <th className="text-left px-4 py-3 font-medium text-zinc-700">City</th>
+                        <th className="text-left px-4 py-3 font-medium text-zinc-700">License #</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paged.map((r) => {
+                        const d = r.row_data;
+                        const isSel = !!selected[r.id];
+                        return (
+                          <tr key={r.id} onClick={() => toggleRow(r)} className={`border-b border-zinc-100 cursor-pointer transition ${isSel ? "bg-blue-50/50" : ""}`}>
+                            <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                              <input type="checkbox" checked={isSel} onChange={() => toggleRow(r)} className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500" />
+                            </td>
+                            <td className="px-4 py-3 text-zinc-900 whitespace-nowrap font-medium">{[d["First Name"], d["Last Name"]].filter(Boolean).join(" ") || "—"}</td>
+                            <td className="px-4 py-3 text-zinc-700">{d["Business Name"] || "—"}</td>
+                            <td className="px-4 py-3 text-zinc-700 whitespace-nowrap">{d["City"] || "—"}</td>
+                            <td className="px-4 py-3 text-zinc-700 font-mono text-xs whitespace-nowrap">{d["License Number"] || "—"}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {filtered.length > PAGE_SIZE && (
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-zinc-500">Page {page} of {totalPages}</div>
+                  <div className="flex gap-2">
+                    <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="px-3 py-1.5 text-sm border border-zinc-300 rounded-lg bg-white text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition">Previous</button>
+                    <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="px-3 py-1.5 text-sm border border-zinc-300 rounded-lg bg-white text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition">Next</button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </main>

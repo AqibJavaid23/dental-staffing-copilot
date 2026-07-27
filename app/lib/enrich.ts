@@ -3,6 +3,7 @@ import { supabase } from "./supabase";
 const APIFY_TOKEN = process.env.NEXT_PUBLIC_APIFY_TOKEN!;
 const GOOGLE_MAPS_ACTOR = process.env.NEXT_PUBLIC_APIFY_GOOGLE_MAPS_ACTOR || "compass~crawler-google-places";
 const CONTACT_ACTOR = process.env.NEXT_PUBLIC_APIFY_CONTACT_ACTOR || "vdrmota~contact-info-scraper";
+const LINKEDIN_ACTOR = process.env.NEXT_PUBLIC_APIFY_LINKEDIN_ACTOR || "harvestapi~linkedin-profile-search-by-name";
 
 export type EnrichmentRecord = {
   license_number: string;
@@ -36,6 +37,13 @@ export type EnrichmentRecord = {
   npi_address: string | null;
   npi_phone: string | null;
   npi_status: string | null;
+  person_linkedin_url?: string | null;
+  person_email?: string | null;
+  person_headline?: string | null;
+  person_confidence?: string | null;
+  person_candidates?: unknown;
+  linkedin_sent?: boolean | null;
+  email_sent?: boolean | null;
 };
 
 type Row = Record<string, string>;
@@ -489,4 +497,140 @@ export async function enrichRowNppes(row: Row, options?: { onProgress?: Progress
     .single();
   if (error) throw error;
   return saved as EnrichmentRecord;
+}// ---------- Find Person (LinkedIn + email via HarvestAPI) ----------
+export type PersonCandidate = {
+  linkedinUrl: string;
+  name: string;
+  headline: string;
+  location: string;
+  email: string | null;
+  emailQuality: number | null;
+  confidence: "high" | "medium" | "low";
+  score: number;
+};
+
+type HarvestProfile = {
+  linkedinUrl?: string;
+  firstName?: string;
+  lastName?: string;
+  headline?: string;
+  emails?: { email?: string; qualityScore?: number; status?: string }[] | null;
+  location?: { linkedinText?: string } | null;
+};
+
+const DENTAL_KEYWORDS = ["dentist", "dental", "dds", "dmd", "hygienist", "rdh", "orthodont", "endodont", "periodont", "prosthodont", "oral surgeon", "dentistry"];
+
+function scorePersonCandidate(row: Row, p: HarvestProfile): { confidence: "high" | "medium" | "low"; score: number } {
+  const rowCity = (row["City"] || "").toLowerCase().trim();
+  const rowState = (row["State"] || "").toLowerCase().trim();
+  const headline = (p.headline || "").toLowerCase();
+  const loc = (p.location?.linkedinText || "").toLowerCase();
+
+  let score = 0;
+  if (rowCity && loc.includes(rowCity)) score += 3;
+  if (rowState && (loc.includes(rowState) || loc.includes("arizona"))) score += 1;
+  if (DENTAL_KEYWORDS.some((k) => headline.includes(k))) score += 4;
+  if (p.emails && p.emails.length > 0 && p.emails[0].email) score += 1;
+
+  let confidence: "high" | "medium" | "low" = "low";
+  if (score >= 6) confidence = "high";
+  else if (score >= 3) confidence = "medium";
+  return { confidence, score };
+}
+
+export async function findPerson(row: Row, options?: { onProgress?: ProgressCallback }): Promise<PersonCandidate[]> {
+  const first = (row["First Name"] || "").trim();
+  const last = (row["Last Name"] || "").trim();
+  const city = (row["City"] || "").trim();
+  const state = (row["State"] || "").trim();
+  const progress = options?.onProgress || (() => {});
+
+  if (!first || !last) throw new Error("Need first and last name to search LinkedIn.");
+
+  // Detect role from the row (dentist vs hygienist) — check License Type, then other hints
+  const licenseType = (row["License Type"] || "").toLowerCase();
+  const businessName = (row["Business Name"] || row["Office Name"] || "").toLowerCase();
+  let roleWord = "dentist";
+  if (licenseType.includes("hygien") || businessName.includes("hygien")) {
+    roleWord = "dental hygienist";
+  }
+
+  // Name-first query so the person's name is the primary match signal.
+  // City helps disambiguate; role word is a light hint at the end.
+  const query = [`${first} ${last}`, city, roleWord].filter(Boolean).join(" ");
+  const location = [city, state || "Arizona"].filter(Boolean).join(", ");
+
+  const input = {
+    query,
+    profileScraperMode: "Full + email search",
+    maxItems: 20,
+    locations: [location],
+  };
+
+  // LinkedIn actors are inconsistent (LinkedIn throttles them), so retry a few times
+  let results: HarvestProfile[] = [];
+  const MAX_ATTEMPTS = 3;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    progress(attempt === 1 ? `Searching LinkedIn for ${first} ${last}...` : `Searching LinkedIn... (attempt ${attempt})`);
+    results = await runActor<HarvestProfile>(LINKEDIN_ACTOR, input);
+    if (results && results.length > 0) break;
+    if (attempt < MAX_ATTEMPTS) {
+      await new Promise((res) => setTimeout(res, 2500));
+    }
+  }
+
+  if (!results || results.length === 0) {
+    progress("No LinkedIn profiles found (LinkedIn may be rate-limiting)");
+    return [];
+  }
+
+  progress(`Found ${results.length} candidate${results.length === 1 ? "" : "s"} — ranking`);
+
+  const candidates: PersonCandidate[] = results.map((p) => {
+    const { confidence, score } = scorePersonCandidate(row, p);
+    const emailObj = p.emails && p.emails.length > 0 ? p.emails[0] : null;
+    return {
+      linkedinUrl: p.linkedinUrl || "",
+      name: [p.firstName, p.lastName].filter(Boolean).join(" ") || "Unknown",
+      headline: p.headline || "—",
+      location: p.location?.linkedinText || "—",
+      email: emailObj?.email || null,
+      emailQuality: emailObj?.qualityScore ?? null,
+      confidence,
+      score,
+    };
+  }).filter((c) => c.linkedinUrl);
+
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates;
+}
+// ---------- Save the chosen person match ----------
+export async function savePersonMatch(
+  licenseNumber: string,
+  chosen: PersonCandidate | null,
+  allCandidates: PersonCandidate[]
+): Promise<void> {
+  const record = {
+    license_number: licenseNumber,
+    person_linkedin_url: chosen?.linkedinUrl || null,
+    person_email: chosen?.email || null,
+    person_headline: chosen?.headline || null,
+    person_confidence: chosen?.confidence || null,
+    person_candidates: allCandidates,
+    updated_at: new Date().toISOString(),
+  };
+  const { error } = await supabase.from("enrichments").upsert(record, { onConflict: "license_number" });
+  if (error) throw error;
+}
+
+// ---------- Toggle sent flags ----------
+export async function setSentFlag(
+  licenseNumber: string,
+  field: "linkedin_sent" | "email_sent",
+  value: boolean
+): Promise<void> {
+  const { error } = await supabase
+    .from("enrichments")
+    .upsert({ license_number: licenseNumber, [field]: value, updated_at: new Date().toISOString() }, { onConflict: "license_number" });
+  if (error) throw error;
 }

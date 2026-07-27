@@ -4,9 +4,10 @@ import { useEffect, useState, use, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/app/lib/supabase";
-import { enrichRow, smartSearchRescue, enrichRowNppes, checkRowInputQuality, type EnrichmentRecord } from "@/app/lib/enrich";
-import BrandLoader from "@/app/components/BrandLoader";
+import { enrichRow, smartSearchRescue, enrichRowNppes, checkRowInputQuality, findPerson, savePersonMatch, setSentFlag, type EnrichmentRecord, type PersonCandidate } from "@/app/lib/enrich";
 import { useAuth } from "@/app/lib/useAuth";
+import BrandLoader from "@/app/components/BrandLoader";
+
 type PipelineRow = {
   id: string;
   license_number: string;
@@ -56,6 +57,7 @@ function formatLogDate(iso: string) {
 export default function PipelineDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const { checking } = useAuth();
   const [pipeline, setPipeline] = useState<Pipeline | null>(null);
   const [rows, setRows] = useState<PipelineRow[]>([]);
   const [enrichments, setEnrichments] = useState<Record<string, EnrichmentRecord>>({});
@@ -66,13 +68,12 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
   const [busyStage, setBusyStage] = useState<string>("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmWeak, setConfirmWeak] = useState<{ row: PipelineRow; missing: string[] } | null>(null);
+  const [personBusy, setPersonBusy] = useState<string | null>(null);
+  const [personCandidates, setPersonCandidates] = useState<Record<string, PersonCandidate[]>>({});
 
-  // Log-entry dialog state
   const [logDialog, setLogDialog] = useState<{ row: PipelineRow; newStatus: string | null } | null>(null);
   const [logNote, setLogNote] = useState("");
   const [savingLog, setSavingLog] = useState(false);
-
-  const { checking } = useAuth();
 
   const load = async () => {
     setLoading(true); setError(null);
@@ -141,13 +142,11 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
     setLogs((prev) => ({ ...prev, [rowId]: (logData ?? []) as LogEntry[] }));
   };
 
-  // ---- CRM: status change opens the log dialog ----
   const onStatusChange = (row: PipelineRow, newStatus: string) => {
     setLogNote("");
     setLogDialog({ row, newStatus });
   };
 
-  // "+ Log" button: note without status change
   const openLogOnly = (row: PipelineRow) => {
     setLogNote("");
     setLogDialog({ row, newStatus: null });
@@ -157,18 +156,15 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
     if (!logDialog) return;
     const { row, newStatus } = logDialog;
     const note = logNote.trim() || null;
-    if (!newStatus && !note) { setLogDialog(null); return; } // nothing to save
+    if (!newStatus && !note) { setLogDialog(null); return; }
     setSavingLog(true);
     try {
-      // 1. Insert the log entry
       const { error: lErr } = await supabase.from("outreach_log").insert({
         pipeline_row_id: row.id,
         status: newStatus,
         note,
       });
       if (lErr) throw lErr;
-
-      // 2. Update the row's current status if it changed
       if (newStatus) {
         const { error: uErr } = await supabase
           .from("pipeline_rows")
@@ -177,16 +173,14 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
         if (uErr) throw uErr;
         setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, outreach_status: newStatus } : r)));
       }
-
       await refreshLogsFor(row.id);
-      setExpandedId(row.id); // show the history
+      setExpandedId(row.id);
       setLogDialog(null);
     } catch (e) {
       alert("Failed to save: " + (e instanceof Error ? e.message : "unknown"));
     } finally { setSavingLog(false); }
   };
 
-  // ---- Enrichment (with candidate-row fix: pass stored license_number into row data) ----
   const enrichableData = (row: PipelineRow) => ({ ...row.row_data, "License Number": row.license_number });
 
   const actuallyEnrich = async (row: PipelineRow) => {
@@ -209,6 +203,34 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
     const quality = checkRowInputQuality(enrichableData(row));
     if (!quality.ok || quality.hasWeakInput) { setConfirmWeak({ row, missing: quality.missing }); return; }
     actuallyEnrich(row);
+  };
+
+  const runFindPerson = async (row: PipelineRow) => {
+    setPersonBusy(row.id);
+    setBusyStage("Searching LinkedIn...");
+    try {
+      const candidates = await findPerson(enrichableData(row), { onProgress: (s) => setBusyStage(s) });
+      setPersonCandidates((prev) => ({ ...prev, [row.id]: candidates }));
+      await savePersonMatch(row.license_number, candidates[0] || null, candidates);
+      await refreshEnrichmentsOnly();
+      setExpandedId(row.id);
+    } catch (e) {
+      alert("Find Person failed: " + (e instanceof Error ? e.message : "unknown"));
+    } finally {
+      setPersonBusy(null);
+      setBusyStage("");
+    }
+  };
+
+  const chooseCandidate = async (row: PipelineRow, c: PersonCandidate) => {
+    const all = personCandidates[row.id] || [];
+    await savePersonMatch(row.license_number, c, all);
+    await refreshEnrichmentsOnly();
+  };
+
+  const toggleSent = async (row: PipelineRow, field: "linkedin_sent" | "email_sent", current: boolean) => {
+    await setSentFlag(row.license_number, field, !current);
+    await refreshEnrichmentsOnly();
   };
 
   const runNppes = async (row: PipelineRow) => {
@@ -248,7 +270,9 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
     ...s,
     count: rows.filter((r) => (r.outreach_status || "to_contact") === s.value).length,
   })).filter((s) => s.count > 0);
-if (checking) return <div className="min-h-screen flex items-center justify-center bg-zinc-50"><BrandLoader label="Loading..." /></div>;
+
+  if (checking) return <div className="min-h-screen flex items-center justify-center bg-zinc-50"><BrandLoader label="Loading..." /></div>;
+
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50">
       <header className="flex justify-between items-center px-6 py-4 border-b border-zinc-200 bg-white">
@@ -303,12 +327,12 @@ if (checking) return <div className="min-h-screen flex items-center justify-cent
                     const isExpanded = expandedId === r.id;
                     const canSmartSearch = enr && (enr.status === "partial" || enr.status === "no_match" || enr.status === "error");
                     const rowLogs = logs[r.id] || [];
-                    const hasAnyResult = !!(enr && (enr.status !== "pending" || enr.npi_status)) || rowLogs.length > 0;
+                    const hasAnyResult = !!(enr && (enr.status !== "pending" || enr.npi_status || enr.person_linkedin_url)) || rowLogs.length > 0;
                     const oStatus = statusMeta(r.outreach_status || "to_contact");
                     const lastLog = rowLogs[0];
                     return (
                       <Fragment key={r.id}>
-                        <tr className={`border-b border-zinc-100 transition-colors ${isBusy ? "bg-blue-50/60" : ""}`}>
+                        <tr className={`border-b border-zinc-100 transition-colors ${isBusy || personBusy === r.id ? "bg-blue-50/60" : ""}`}>
                           <td className="px-4 py-3 text-center">
                             {hasAnyResult && (
                               <button onClick={() => setExpandedId(isExpanded ? null : r.id)} className="text-zinc-400 hover:text-zinc-700">
@@ -346,11 +370,15 @@ if (checking) return <div className="min-h-screen flex items-center justify-cent
                           <td className="px-4 py-3 whitespace-nowrap">
                             <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md ${style.classes}`}>{style.label}</span>
                             {enr?.npi_status === "verified" && <span className="ml-1 text-[10px] text-emerald-600">NPI✓</span>}
+                            {enr?.person_linkedin_url && <span className="ml-1 text-[10px] text-indigo-600">in✓</span>}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-right">
                             <div className="flex gap-2 justify-end">
                               <button onClick={() => openLogOnly(r)} disabled={isBusy} className="px-3 py-1 text-xs font-medium border border-zinc-300 text-zinc-700 rounded-md hover:bg-zinc-50 transition disabled:opacity-40" title="Add a note to the outreach history">
                                 + Log
+                              </button>
+                              <button onClick={() => runFindPerson(r)} disabled={personBusy === r.id} className="px-3 py-1 text-xs font-medium bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition disabled:opacity-60 disabled:cursor-not-allowed" title="Find the person's LinkedIn + email">
+                                {personBusy === r.id ? "..." : enr?.person_linkedin_url ? "Person ↻" : "Find Person"}
                               </button>
                               <button onClick={() => runNppes(r)} disabled={isBusy} className="px-3 py-1 text-xs font-medium bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition disabled:opacity-60 disabled:cursor-not-allowed" title="Free official registry lookup">
                                 {isBusy ? "..." : enr?.npi_status ? "NPPES ↻" : "NPPES"}
@@ -371,7 +399,7 @@ if (checking) return <div className="min-h-screen flex items-center justify-cent
                           </td>
                         </tr>
 
-                        {isBusy && (
+                        {(isBusy || personBusy === r.id) && (
                           <tr className="bg-blue-50/60 border-b border-zinc-100">
                             <td colSpan={8} className="px-6 py-2 text-xs text-blue-700">
                               <span className="inline-block w-2 h-2 bg-blue-500 rounded-full animate-pulse mr-2 align-middle" />
@@ -395,28 +423,64 @@ if (checking) return <div className="min-h-screen flex items-center justify-cent
                         {isExpanded && (
                           <tr className="bg-zinc-50/50">
                             <td colSpan={8} className="px-6 py-4">
-                              <div className="grid grid-cols-4 gap-6 text-sm">
-                                {/* Outreach History */}
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
+                                {/* Person Contact */}
                                 <div>
-                                  <h4 className="font-semibold text-zinc-900 mb-2">Outreach History</h4>
-                                  {rowLogs.length > 0 ? (
-                                    <ol className="space-y-2 max-h-64 overflow-y-auto pr-2">
-                                      {rowLogs.map((l) => {
-                                        const meta = l.status ? statusMeta(l.status) : null;
-                                        return (
-                                          <li key={l.id} className="text-xs border-l-2 pl-2" style={{ borderColor: meta?.color || "#d4d4d8" }}>
-                                            <div className="flex items-center gap-1.5">
-                                              {meta && <span className="font-semibold" style={{ color: meta.color }}>{meta.label}</span>}
-                                              <span className="text-zinc-400">{formatLogDate(l.created_at)}</span>
+                                  <h4 className="font-semibold text-zinc-900 mb-2">Person Contact</h4>
+                                  {(() => {
+                                    const cands = personCandidates[r.id] || (enr?.person_candidates as PersonCandidate[] | undefined) || [];
+                                    if (!enr?.person_linkedin_url && cands.length === 0) {
+                                      return <p className="text-xs text-zinc-400 italic">Not searched yet. Click Find Person.</p>;
+                                    }
+                                    return (
+                                      <div className="space-y-2 text-xs">
+                                        {enr?.person_linkedin_url && (
+                                          <div className="pb-2 border-b border-zinc-200">
+                                            <div className="flex items-center gap-1.5 mb-1">
+                                              <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                                                enr.person_confidence === "high" ? "bg-emerald-100 text-emerald-700"
+                                                : enr.person_confidence === "medium" ? "bg-amber-100 text-amber-700"
+                                                : "bg-zinc-100 text-zinc-600"
+                                              }`}>
+                                                {enr.person_confidence === "high" ? "✓ Strong match" : enr.person_confidence === "medium" ? "~ Probable" : "? Weak"}
+                                              </span>
+                                              <span className="font-medium text-zinc-900">Selected</span>
                                             </div>
-                                            {l.note && <p className="text-zinc-700 mt-0.5">{l.note}</p>}
-                                          </li>
-                                        );
-                                      })}
-                                    </ol>
-                                  ) : (
-                                    <p className="text-xs text-zinc-400 italic">No activity logged yet. Use + Log or change the status.</p>
-                                  )}
+                                            {enr.person_headline && <div className="text-zinc-600">{enr.person_headline}</div>}
+                                            {enr.person_email && <div className="text-zinc-900 font-mono">{enr.person_email}</div>}
+                                            <div className="flex gap-2 mt-1">
+                                              <a href={enr.person_linkedin_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Open LinkedIn →</a>
+                                            </div>
+                                            <div className="flex gap-3 mt-2">
+                                              <label className="flex items-center gap-1 cursor-pointer">
+                                                <input type="checkbox" checked={!!enr.linkedin_sent} onChange={() => toggleSent(r, "linkedin_sent", !!enr.linkedin_sent)} className="h-3.5 w-3.5 rounded border-zinc-300 text-blue-600" />
+                                                <span className="text-zinc-600">LinkedIn sent</span>
+                                              </label>
+                                              <label className="flex items-center gap-1 cursor-pointer">
+                                                <input type="checkbox" checked={!!enr.email_sent} onChange={() => toggleSent(r, "email_sent", !!enr.email_sent)} className="h-3.5 w-3.5 rounded border-zinc-300 text-blue-600" />
+                                                <span className="text-zinc-600">Email sent</span>
+                                              </label>
+                                            </div>
+                                          </div>
+                                        )}
+                                        {cands.length > 0 && (
+                                          <div>
+                                            <div className="text-zinc-500 mb-1">All matches (click to select):</div>
+                                            <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                                              {cands.map((c, i) => (
+                                                <button key={i} onClick={() => chooseCandidate(r, c)} className={`block w-full text-left px-2 py-1 rounded hover:bg-zinc-100 transition ${enr?.person_linkedin_url === c.linkedinUrl ? "bg-blue-50" : ""}`}>
+                                                  <span className={`inline-block w-2 h-2 rounded-full mr-1 align-middle ${c.confidence === "high" ? "bg-emerald-500" : c.confidence === "medium" ? "bg-amber-500" : "bg-zinc-300"}`} />
+                                                  <span className="text-zinc-800">{c.name}</span>
+                                                  <span className="text-zinc-400"> — {c.headline}</span>
+                                                  <span className="text-zinc-400 block ml-3">{c.location}{c.email ? ` · ${c.email}` : ""}</span>
+                                                </button>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
 
                                 {/* NPPES */}
@@ -482,6 +546,29 @@ if (checking) return <div className="min-h-screen flex items-center justify-cent
                                   </dl>
                                 </div>
                               </div>
+
+                              {/* Outreach History (full width, below the four columns) */}
+                              <div className="mt-5 pt-4 border-t border-zinc-200">
+                                <h4 className="font-semibold text-zinc-900 mb-2">Outreach History</h4>
+                                {rowLogs.length > 0 ? (
+                                  <ol className="space-y-2 max-h-64 overflow-y-auto pr-2">
+                                    {rowLogs.map((l) => {
+                                      const meta = l.status ? statusMeta(l.status) : null;
+                                      return (
+                                        <li key={l.id} className="text-xs border-l-2 pl-2" style={{ borderColor: meta?.color || "#d4d4d8" }}>
+                                          <div className="flex items-center gap-1.5">
+                                            {meta && <span className="font-semibold" style={{ color: meta.color }}>{meta.label}</span>}
+                                            <span className="text-zinc-400">{formatLogDate(l.created_at)}</span>
+                                          </div>
+                                          {l.note && <p className="text-zinc-700 mt-0.5">{l.note}</p>}
+                                        </li>
+                                      );
+                                    })}
+                                  </ol>
+                                ) : (
+                                  <p className="text-xs text-zinc-400 italic">No activity logged yet. Use + Log or change the status.</p>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         )}
@@ -495,7 +582,6 @@ if (checking) return <div className="min-h-screen flex items-center justify-cent
         </div>
       </main>
 
-      {/* Log entry dialog (status change or +Log) */}
       {logDialog && (
         <div className="fixed inset-0 z-40 bg-black/50 flex items-center justify-center p-4" onClick={() => !savingLog && setLogDialog(null)}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
