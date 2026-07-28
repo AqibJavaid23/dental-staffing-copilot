@@ -4,7 +4,7 @@ import { useEffect, useState, use, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/app/lib/supabase";
-import { enrichRow, smartSearchRescue, enrichRowNppes, checkRowInputQuality, findPerson, savePersonMatch, setSentFlag, type EnrichmentRecord, type PersonCandidate } from "@/app/lib/enrich";
+import { enrichRow, smartSearchRescue, enrichRowNppes, checkRowInputQuality, findPerson, savePersonMatch, setSentFlag, findEmailByUrl, savePersonUrlEmail, type EnrichmentRecord, type PersonCandidate, type EmailResult } from "@/app/lib/enrich";
 import { useAuth } from "@/app/lib/useAuth";
 import BrandLoader from "@/app/components/BrandLoader";
 
@@ -70,7 +70,8 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
   const [confirmWeak, setConfirmWeak] = useState<{ row: PipelineRow; missing: string[] } | null>(null);
   const [personBusy, setPersonBusy] = useState<string | null>(null);
   const [personCandidates, setPersonCandidates] = useState<Record<string, PersonCandidate[]>>({});
-
+  const [urlInput, setUrlInput] = useState<Record<string, string>>({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [logDialog, setLogDialog] = useState<{ row: PipelineRow; newStatus: string | null } | null>(null);
   const [logNote, setLogNote] = useState("");
   const [savingLog, setSavingLog] = useState(false);
@@ -205,6 +206,31 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
     actuallyEnrich(row);
   };
 
+  const copyForLinkedIn = (row: PipelineRow, role: "dentist" | "dental hygienist") => {
+    const d = row.row_data;
+    const text = [d["First Name"], d["Last Name"], d["City"], role].filter(Boolean).join(" ");
+    navigator.clipboard.writeText(text);
+    setCopiedId(row.id + role);
+    setTimeout(() => setCopiedId(null), 1500);
+  };
+
+  const getEmailForRow = async (row: PipelineRow) => {
+    const url = (urlInput[row.id] || "").trim();
+    if (!url) { alert("Paste the LinkedIn profile URL first."); return; }
+    setPersonBusy(row.id);
+    setBusyStage("Looking up email...");
+    try {
+      const result = await findEmailByUrl(url, { onProgress: (s) => setBusyStage(s) });
+      await savePersonUrlEmail(row.license_number, url, result);
+      await refreshEnrichmentsOnly();
+      setExpandedId(row.id);
+    } catch (e) {
+      alert("Email lookup failed: " + (e instanceof Error ? e.message : "unknown"));
+    } finally {
+      setPersonBusy(null);
+      setBusyStage("");
+    }
+  };
   const runFindPerson = async (row: PipelineRow) => {
     setPersonBusy(row.id);
     setBusyStage("Searching LinkedIn...");
@@ -377,9 +403,6 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
                               <button onClick={() => openLogOnly(r)} disabled={isBusy} className="px-3 py-1 text-xs font-medium border border-zinc-300 text-zinc-700 rounded-md hover:bg-zinc-50 transition disabled:opacity-40" title="Add a note to the outreach history">
                                 + Log
                               </button>
-                              <button onClick={() => runFindPerson(r)} disabled={personBusy === r.id} className="px-3 py-1 text-xs font-medium bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition disabled:opacity-60 disabled:cursor-not-allowed" title="Find the person's LinkedIn + email">
-                                {personBusy === r.id ? "..." : enr?.person_linkedin_url ? "Person ↻" : "Find Person"}
-                              </button>
                               <button onClick={() => runNppes(r)} disabled={isBusy} className="px-3 py-1 text-xs font-medium bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition disabled:opacity-60 disabled:cursor-not-allowed" title="Free official registry lookup">
                                 {isBusy ? "..." : enr?.npi_status ? "NPPES ↻" : "NPPES"}
                               </button>
@@ -424,66 +447,64 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
                           <tr className="bg-zinc-50/50">
                             <td colSpan={8} className="px-6 py-4">
                               <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
-                                {/* Person Contact */}
+                               {/* Person Contact — hybrid manual flow */}
                                 <div>
-                                  <h4 className="font-semibold text-zinc-900 mb-2">Person Contact</h4>
-                                  {(() => {
-                                    const cands = personCandidates[r.id] || (enr?.person_candidates as PersonCandidate[] | undefined) || [];
-                                    if (!enr?.person_linkedin_url && cands.length === 0) {
-                                      return <p className="text-xs text-zinc-400 italic">Not searched yet. Click Find Person.</p>;
-                                    }
-                                    return (
-                                      <div className="space-y-2 text-xs">
-                                        {enr?.person_linkedin_url && (
-                                          <div className="pb-2 border-b border-zinc-200">
-                                            <div className="flex items-center gap-1.5 mb-1">
-                                              <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                                                enr.person_confidence === "high" ? "bg-emerald-100 text-emerald-700"
-                                                : enr.person_confidence === "medium" ? "bg-amber-100 text-amber-700"
-                                                : "bg-zinc-100 text-zinc-600"
-                                              }`}>
-                                                {enr.person_confidence === "high" ? "✓ Strong match" : enr.person_confidence === "medium" ? "~ Probable" : "? Weak"}
-                                              </span>
-                                              <span className="font-medium text-zinc-900">Selected</span>
-                                            </div>
-                                            {enr.person_headline && <div className="text-zinc-600">{enr.person_headline}</div>}
-                                            {enr.person_email && <div className="text-zinc-900 font-mono">{enr.person_email}</div>}
-                                            <div className="flex gap-2 mt-1">
-                                              <a href={enr.person_linkedin_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Open LinkedIn →</a>
-                                            </div>
-                                            <div className="flex gap-3 mt-2">
-                                              <label className="flex items-center gap-1 cursor-pointer">
-                                                <input type="checkbox" checked={!!enr.linkedin_sent} onChange={() => toggleSent(r, "linkedin_sent", !!enr.linkedin_sent)} className="h-3.5 w-3.5 rounded border-zinc-300 text-blue-600" />
-                                                <span className="text-zinc-600">LinkedIn sent</span>
-                                              </label>
-                                              <label className="flex items-center gap-1 cursor-pointer">
-                                                <input type="checkbox" checked={!!enr.email_sent} onChange={() => toggleSent(r, "email_sent", !!enr.email_sent)} className="h-3.5 w-3.5 rounded border-zinc-300 text-blue-600" />
-                                                <span className="text-zinc-600">Email sent</span>
-                                              </label>
-                                            </div>
-                                          </div>
-                                        )}
-                                        {cands.length > 0 && (
-                                          <div>
-                                            <div className="text-zinc-500 mb-1">All matches (click to select):</div>
-                                            <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
-                                              {cands.map((c, i) => (
-                                                <button key={i} onClick={() => chooseCandidate(r, c)} className={`block w-full text-left px-2 py-1 rounded hover:bg-zinc-100 transition ${enr?.person_linkedin_url === c.linkedinUrl ? "bg-blue-50" : ""}`}>
-                                                  <span className={`inline-block w-2 h-2 rounded-full mr-1 align-middle ${c.confidence === "high" ? "bg-emerald-500" : c.confidence === "medium" ? "bg-amber-500" : "bg-zinc-300"}`} />
-                                                  <span className="text-zinc-800">{c.name}</span>
-                                                  <span className="text-zinc-400"> — {c.headline}</span>
-                                                  <span className="text-zinc-400 block ml-3">{c.location}{c.email ? ` · ${c.email}` : ""}</span>
-                                                </button>
-                                              ))}
-                                            </div>
-                                          </div>
-                                        )}
-                                      </div>
-                                    );
-                                  })()}
-                                </div>
+                                  <h4 className="font-semibold text-zinc-900 mb-2">Person Contact (LinkedIn)</h4>
+                                  <div className="space-y-2 text-xs">
+                                    {/* Copy-for-search buttons */}
+                                    <div className="flex gap-2">
+                                      <button onClick={() => copyForLinkedIn(r, "dentist")} className="px-2 py-1 border border-zinc-300 rounded hover:bg-zinc-50 transition">
+                                        {copiedId === r.id + "dentist" ? "Copied!" : "📋 Copy as Dentist"}
+                                      </button>
+                                      <button onClick={() => copyForLinkedIn(r, "dental hygienist")} className="px-2 py-1 border border-zinc-300 rounded hover:bg-zinc-50 transition">
+                                        {copiedId === r.id + "dental hygienist" ? "Copied!" : "📋 Copy as Hygienist"}
+                                      </button>
+                                    </div>
+                                    <p className="text-zinc-400">Search LinkedIn with the copied text, then paste the profile URL below.</p>
 
-                                {/* NPPES */}
+                                    {/* Paste URL + Get Email */}
+                                    <div className="flex gap-1">
+                                      <input
+                                        type="text"
+                                        value={urlInput[r.id] || ""}
+                                        onChange={(e) => setUrlInput((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                                        placeholder="Paste linkedin.com/in/... URL"
+                                        className="flex-1 px-2 py-1 border border-zinc-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        onClick={(e) => e.stopPropagation()}
+                                      />
+                                      <button onClick={() => getEmailForRow(r)} disabled={personBusy === r.id} className="px-2 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition disabled:opacity-50 whitespace-nowrap">
+                                        {personBusy === r.id ? "..." : "Get Email"}
+                                      </button>
+                                    </div>
+
+                                    {/* Saved result */}
+                                    {enr?.person_linkedin_url && (
+                                      <div className="pt-2 border-t border-zinc-200 space-y-1">
+                                        <a href={enr.person_linkedin_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline block break-all">Open LinkedIn →</a>
+                                        {enr.person_email ? (
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-zinc-900 font-mono break-all">{enr.person_email}</span>
+                                            <button onClick={() => { navigator.clipboard.writeText(enr.person_email || ""); setCopiedId(r.id + "email"); setTimeout(() => setCopiedId(null), 1500); }} className="text-blue-600 hover:underline whitespace-nowrap">
+                                              {copiedId === r.id + "email" ? "Copied!" : "copy"}
+                                            </button>
+                                          </div>
+                                        ) : enr.person_email_found === false ? (
+                                          <span className="text-zinc-500 italic">No email found</span>
+                                        ) : null}
+                                        <div className="flex gap-3 mt-1">
+                                          <label className="flex items-center gap-1 cursor-pointer">
+                                            <input type="checkbox" checked={!!enr.linkedin_sent} onChange={() => toggleSent(r, "linkedin_sent", !!enr.linkedin_sent)} className="h-3.5 w-3.5 rounded border-zinc-300 text-blue-600" />
+                                            <span className="text-zinc-600">LinkedIn sent</span>
+                                          </label>
+                                          <label className="flex items-center gap-1 cursor-pointer">
+                                            <input type="checkbox" checked={!!enr.email_sent} onChange={() => toggleSent(r, "email_sent", !!enr.email_sent)} className="h-3.5 w-3.5 rounded border-zinc-300 text-blue-600" />
+                                            <span className="text-zinc-600">Email sent</span>
+                                          </label>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
                                 <div>
                                   <h4 className="font-semibold text-zinc-900 mb-2">From NPPES Registry</h4>
                                   {enr?.npi_status ? (

@@ -44,6 +44,8 @@ export type EnrichmentRecord = {
   person_candidates?: unknown;
   linkedin_sent?: boolean | null;
   email_sent?: boolean | null;
+  person_email_found?: boolean | null;
+  person_email_company?: string | null;
 };
 
 type Row = Record<string, string>;
@@ -632,5 +634,53 @@ export async function setSentFlag(
   const { error } = await supabase
     .from("enrichments")
     .upsert({ license_number: licenseNumber, [field]: value, updated_at: new Date().toISOString() }, { onConflict: "license_number" });
+  if (error) throw error;
+}
+// ---------- Find email from a confirmed LinkedIn URL (vulnv/linkedin-email-finder) ----------
+const EMAIL_FINDER_ACTOR = process.env.NEXT_PUBLIC_APIFY_EMAIL_ACTOR || "vulnv~linkedin-email-finder";
+
+export type EmailResult = {
+  found: boolean;
+  email: string | null;
+  name: string | null;
+  company: string | null;
+};
+
+export async function findEmailByUrl(linkedinUrl: string, options?: { onProgress?: ProgressCallback }): Promise<EmailResult> {
+  const progress = options?.onProgress || (() => {});
+  const url = linkedinUrl.trim();
+  if (!url || !url.includes("linkedin.com/in/")) {
+    throw new Error("Please paste a valid LinkedIn profile URL (linkedin.com/in/...).");
+  }
+
+  progress("Looking up email from LinkedIn profile...");
+  const results = await runActor<{ found?: boolean; email?: string; name?: string; company?: string }>(
+    EMAIL_FINDER_ACTOR,
+    { urls: [url] }
+  );
+
+  const r = results?.[0];
+  if (!r || !r.found || !r.email) {
+    return { found: false, email: null, name: r?.name || null, company: r?.company || null };
+  }
+  return { found: true, email: r.email, name: r.name || null, company: r.company || null };
+}
+
+// ---------- Save the manually-confirmed LinkedIn URL + email ----------
+export async function savePersonUrlEmail(
+  licenseNumber: string,
+  linkedinUrl: string,
+  email: EmailResult | null
+): Promise<void> {
+  const record = {
+    license_number: licenseNumber,
+    person_linkedin_url: linkedinUrl.trim() || null,
+    person_email: email?.email || null,
+    person_email_found: email ? email.found : null,
+    person_email_company: email?.company || null,
+    person_confidence: "high", // human-confirmed URL = high confidence
+    updated_at: new Date().toISOString(),
+  };
+  const { error } = await supabase.from("enrichments").upsert(record, { onConflict: "license_number" });
   if (error) throw error;
 }
