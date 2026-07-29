@@ -5,12 +5,17 @@ export async function GET(req: NextRequest) {
   const first = searchParams.get("first") || "";
   const last = searchParams.get("last") || "";
   const state = searchParams.get("state") || "";
+  const city = searchParams.get("city") || "";
+  const npi = searchParams.get("npi") || "";
 
-  if (!first || !last) {
-    return NextResponse.json({ error: "first and last name required" }, { status: 400 });
+  let url: string;
+  if (npi) {
+    url = `https://npiregistry.cms.hhs.gov/api/?version=2.1&number=${encodeURIComponent(npi)}&limit=10`;
+  } else if (first || last || city) {
+    url = `https://npiregistry.cms.hhs.gov/api/?version=2.1&first_name=${encodeURIComponent(first)}&last_name=${encodeURIComponent(last)}&state=${encodeURIComponent(state)}&city=${encodeURIComponent(city)}&limit=20`;
+  } else {
+    return NextResponse.json({ error: "Provide an NPI number or a name/city" }, { status: 400 });
   }
-
-  const url = `https://npiregistry.cms.hhs.gov/api/?version=2.1&first_name=${encodeURIComponent(first)}&last_name=${encodeURIComponent(last)}&state=${encodeURIComponent(state)}&limit=10`;
 
   try {
     const res = await fetch(url);

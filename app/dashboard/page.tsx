@@ -56,6 +56,14 @@ export default function Dashboard() {
                 <span className="text-sm font-medium group-hover:translate-x-1 transition inline-block" style={{ color: "var(--brand-blue)" }}>Open →</span>
               </div>
             </Link>
+            <Link href="/dashboard/lookup" className="group card-hover bg-white rounded-2xl p-8 shadow-sm border border-zinc-200">
+              <div className="flex flex-col items-start space-y-3">
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl" style={{ backgroundColor: "rgba(0, 128, 208, 0.1)" }}>🔎</div>
+                <h3 className="text-xl font-semibold" style={{ color: "var(--brand-navy)" }}>Provider Lookup</h3>
+                <p className="text-sm text-zinc-500">Find any provider by NPI or name, then send them to a pipeline.</p>
+                <span className="text-sm font-medium group-hover:translate-x-1 transition inline-block" style={{ color: "var(--brand-blue)" }}>Open →</span>
+              </div>
+            </Link>
             <Link href="/dashboard/candidates" className="group card-hover bg-white rounded-2xl p-8 shadow-sm border border-zinc-200">
               <div className="flex flex-col items-start space-y-3">
                 <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl" style={{ backgroundColor: "rgba(0, 128, 208, 0.1)" }}>🎯</div>

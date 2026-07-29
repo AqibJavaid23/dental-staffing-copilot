@@ -684,3 +684,61 @@ export async function savePersonUrlEmail(
   const { error } = await supabase.from("enrichments").upsert(record, { onConflict: "license_number" });
   if (error) throw error;
 }
+// ---------- Provider Lookup (free NPPES search) ----------
+export type ProviderResult = {
+  npi: string;
+  name: string;
+  credential: string;
+  specialty: string;
+  practice: string;
+  city: string;
+  state: string;
+  phone: string;
+  license: string;
+  licenseState: string;
+  status: string;
+};
+
+function mapNppesResult(r: NpiResult): ProviderResult {
+  const loc = (r.addresses || []).find((a) => a.address_purpose === "LOCATION") || (r.addresses || [])[0];
+  const practice = loc ? [loc.address_1, loc.address_2, loc.city, loc.state, loc.postal_code].filter(Boolean).join(", ") : "";
+  const tax = (r.taxonomies || []).find((t) => t.primary) || (r.taxonomies || [])[0];
+  const licObj = (r.taxonomies || []).find((t) => t.license);
+  return {
+    npi: r.number || "",
+    name: [r.basic?.first_name, r.basic?.last_name].filter(Boolean).join(" ") + (r.basic?.credential ? `, ${r.basic.credential}` : ""),
+    credential: r.basic?.credential || "",
+    specialty: tax?.desc || "",
+    practice,
+    city: loc?.city || "",
+    state: loc?.state || "",
+    phone: loc?.telephone_number || "",
+    license: licObj?.license || "",
+    licenseState: licObj?.state || "",
+    status: "",
+  };
+}
+
+// Search NPPES by NPI number
+export async function lookupByNpi(npi: string): Promise<ProviderResult[]> {
+  const clean = npi.replace(/\D/g, "");
+  if (clean.length !== 10) throw new Error("NPI must be a 10-digit number.");
+  const res = await fetch(`/api/nppes?npi=${encodeURIComponent(clean)}`);
+  if (!res.ok) throw new Error(`Lookup failed (${res.status})`);
+  const data = (await res.json()) as { results?: NpiResult[] };
+  return (data.results || []).map(mapNppesResult);
+}
+
+// Search NPPES by name (+ optional state)
+export async function lookupByName(first: string, last: string, state: string, city: string = ""): Promise<ProviderResult[]> {
+  if (!first && !last && !city) throw new Error("Enter a name or city.");
+  const params = new URLSearchParams();
+  if (first) params.set("first", first);
+  if (last) params.set("last", last);
+  if (state) params.set("state", state);
+  if (city) params.set("city", city);
+  const res = await fetch(`/api/nppes?${params.toString()}`);
+  if (!res.ok) throw new Error(`Lookup failed (${res.status})`);
+  const data = (await res.json()) as { results?: NpiResult[] };
+  return (data.results || []).map(mapNppesResult);
+}
