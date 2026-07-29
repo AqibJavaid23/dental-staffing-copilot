@@ -8,7 +8,7 @@ import * as XLSX from "xlsx";
 import { supabase } from "@/app/lib/supabase";
 import { useAuth } from "@/app/lib/useAuth";
 import BrandLoader from "@/app/components/BrandLoader";
-
+import { findMyPipelineByName, createPipeline, mergeIntoPipeline } from "@/app/lib/savePipeline";
 const ROW_LIMIT = 5000;
 const PAGE_SIZE = 50;
 const EXPECTED = ["First Name", "Last Name", "Business Name", "City", "State", "License Number"];
@@ -46,7 +46,7 @@ export default function MyDataPage() {
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [pipelineName, setPipelineName] = useState("");
   const [saving, setSaving] = useState(false);
-
+  const [dupePipelineId, setDupePipelineId] = useState<string | null>(null);
   const load = useCallback(async () => {
     if (!profile) return;
     setLoading(true); setError(null);
@@ -172,22 +172,25 @@ export default function MyDataPage() {
   };
   const selectedCount = Object.keys(selected).length;
 
+ // Build the rows to save (shared by create + merge)
+  const buildRows = () =>
+    Object.values(selected).map((r) => ({
+      license_number: (r.row_data["License Number"] || `UP::${r.id}`).trim(),
+      row_data: r.row_data,
+    }));
+
   const savePipeline = async () => {
     if (!profile || !pipelineName.trim()) return;
     setSaving(true);
     try {
-      const { data: pipeline, error: pErr } = await supabase
-        .from("pipelines")
-        .insert({ name: pipelineName.trim(), source_tab: "Upload", project: "DSCP", owner_id: profile.id })
-        .select().single();
-      if (pErr) throw pErr;
-      const rowsToInsert = Object.values(selected).map((r) => ({
-        pipeline_id: pipeline.id,
-        license_number: (r.row_data["License Number"] || `UP::${r.id}`).trim(),
-        row_data: r.row_data,
-      }));
-      const { error: rErr } = await supabase.from("pipeline_rows").insert(rowsToInsert);
-      if (rErr) throw rErr;
+      const existingId = await findMyPipelineByName(profile.id, pipelineName.trim());
+      if (existingId) {
+        // Name taken — ask the user what to do
+        setDupePipelineId(existingId);
+        setSaving(false);
+        return;
+      }
+      await createPipeline(profile.id, pipelineName.trim(), "Upload", buildRows());
       setSelected({}); setShowSaveDialog(false); setPipelineName("");
       router.push("/pipelines");
     } catch (e) {
@@ -195,6 +198,23 @@ export default function MyDataPage() {
     } finally { setSaving(false); }
   };
 
+  const doMerge = async () => {
+    if (!profile || !dupePipelineId) return;
+    setSaving(true);
+    try {
+      const res = await mergeIntoPipeline(dupePipelineId, buildRows());
+      alert(res.status === "merged" ? `Added ${res.added} row(s), skipped ${res.skipped} already in the pipeline.` : "Merged.");
+      setSelected({}); setShowSaveDialog(false); setPipelineName(""); setDupePipelineId(null);
+      router.push("/pipelines");
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Merge failed");
+    } finally { setSaving(false); }
+  };
+
+  const doCreateNewName = () => {
+    // Let the user pick a different name — just close the dupe dialog, keep the save dialog open
+    setDupePipelineId(null);
+  };
   if (checking) return <div className="min-h-screen flex items-center justify-center bg-zinc-50"><BrandLoader label="Loading..." /></div>;
 
   return (
@@ -334,6 +354,24 @@ export default function MyDataPage() {
             <div className="flex justify-end gap-2 pt-2">
               <button onClick={() => setShowSaveDialog(false)} disabled={saving} className="px-4 py-2 text-sm text-zinc-600 hover:text-zinc-900 transition disabled:opacity-40">Cancel</button>
               <button onClick={savePipeline} disabled={saving} className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-40">{saving ? "Saving..." : "Save pipeline"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {dupePipelineId && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => !saving && setDupePipelineId(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-zinc-900">A pipeline named &quot;{pipelineName.trim()}&quot; already exists</h2>
+            <p className="text-sm text-zinc-500">
+              Do you want to add these {selectedCount} row(s) into the existing pipeline (duplicates skipped), or create a new one with a different name?
+            </p>
+            <div className="flex flex-col gap-2 pt-2">
+              <button onClick={doMerge} disabled={saving} className="w-full px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-40">
+                {saving ? "Merging..." : "Merge into existing pipeline"}
+              </button>
+              <button onClick={doCreateNewName} disabled={saving} className="w-full px-4 py-2 text-sm font-medium border border-zinc-300 text-zinc-700 rounded-lg hover:bg-zinc-50 transition disabled:opacity-40">
+                Use a different name
+              </button>
             </div>
           </div>
         </div>
