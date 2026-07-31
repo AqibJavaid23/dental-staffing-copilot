@@ -48,6 +48,13 @@ const CARDS = [
     desc: "Manage recruiting pipelines — enrichment, outreach status, and activity history.",
     accent: "#123B78",
   },
+{
+    href: "/dashboard/jobs",
+    icon: "💼",
+    title: "Job Postings",
+    desc: "Find dental job postings (hiring practices) on LinkedIn and more.",
+    accent: "#0ea5e9",
+  },
 ];
 
 const ROLE_LABEL: Record<string, string> = { admin: "Admin", manager: "Manager", member: "Member" };

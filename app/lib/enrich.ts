@@ -742,3 +742,62 @@ export async function lookupByName(first: string, last: string, state: string, c
   const data = (await res.json()) as { results?: NpiResult[] };
   return (data.results || []).map(mapNppesResult);
 }
+// ---------- LinkedIn Job Postings (valig/linkedin-jobs-scraper) ----------
+const JOBS_ACTOR = process.env.NEXT_PUBLIC_APIFY_JOBS_ACTOR || "valig~linkedin-jobs-scraper";
+
+export type JobPosting = {
+  id: string;
+  title: string;
+  company: string;
+  companyUrl: string;
+  location: string;
+  postedTimeAgo: string;
+  postedDate: string;
+  contractType: string;
+  experienceLevel: string;
+  url: string;
+  description: string;
+};
+
+export type JobFilters = {
+  title: string;
+  location: string;
+  datePosted?: string;
+  contractType?: string;
+  experienceLevel?: string;
+  remote?: string;
+  limit?: number;
+};
+
+export async function searchJobs(filters: JobFilters, options?: { onProgress?: ProgressCallback }): Promise<JobPosting[]> {
+  const progress = options?.onProgress || (() => {});
+  if (!filters.title.trim()) throw new Error("Enter a job title (e.g. General Dentist).");
+
+  progress(`Searching LinkedIn jobs: ${filters.title}...`);
+
+  const input: Record<string, unknown> = {
+    title: filters.title.trim(),
+    location: filters.location.trim() || "United States",
+    rows: filters.limit || 50,
+  };
+  if (filters.datePosted) input.publishedAt = filters.datePosted;
+  if (filters.contractType) input.contractType = filters.contractType;
+  if (filters.experienceLevel) input.experienceLevel = filters.experienceLevel;
+  if (filters.remote) input.workType = filters.remote;
+
+  const results = await runActor<Record<string, unknown>>(JOBS_ACTOR, input);
+
+  return (results || []).map((j) => ({
+    id: String(j.id || j.url || Math.random()),
+    title: String(j.title || ""),
+    company: String(j.companyName || ""),
+    companyUrl: String(j.companyUrl || ""),
+    location: String(j.location || ""),
+    postedTimeAgo: String(j.postedTimeAgo || ""),
+    postedDate: String(j.postedDate || ""),
+    contractType: String(j.contractType || ""),
+    experienceLevel: String(j.experienceLevel || ""),
+    url: String(j.url || ""),
+    description: String(j.description || ""),
+  }));
+}
