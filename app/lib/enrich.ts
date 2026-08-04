@@ -781,9 +781,9 @@ export async function searchJobs(filters: JobFilters, options?: { onProgress?: P
     rows: filters.limit || 50,
   };
   if (filters.datePosted) input.publishedAt = filters.datePosted;
-  if (filters.contractType) input.contractType = filters.contractType;
-  if (filters.experienceLevel) input.experienceLevel = filters.experienceLevel;
-  if (filters.remote) input.workType = filters.remote;
+  if (filters.contractType) input.contractType = [filters.contractType];
+  if (filters.experienceLevel) input.experienceLevel = [filters.experienceLevel];
+  if (filters.remote) input.workType = [filters.remote];
 
   const results = await runActor<Record<string, unknown>>(JOBS_ACTOR, input);
 
