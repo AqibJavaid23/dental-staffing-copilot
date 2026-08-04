@@ -780,10 +780,21 @@ export async function searchJobs(filters: JobFilters, options?: { onProgress?: P
     location: filters.location.trim() || "United States",
     rows: filters.limit || 50,
   };
+  // The actor expects coded values, not the display labels
+  const CONTRACT_CODE: Record<string, string> = {
+    "Full-time": "F", "Part-time": "P", "Contract": "C", "Temporary": "T", "Internship": "I", "Other": "O",
+  };
+  const EXP_CODE: Record<string, string> = {
+    "Internship": "1", "Entry level": "2", "Associate": "3", "Mid-Senior level": "4", "Director": "5", "Executive": "6",
+  };
+  const REMOTE_CODE: Record<string, string> = {
+    "On-site": "1", "Remote": "2", "Hybrid": "3",
+  };
+
   if (filters.datePosted) input.publishedAt = filters.datePosted;
-  if (filters.contractType) input.contractType = [filters.contractType];
-  if (filters.experienceLevel) input.experienceLevel = [filters.experienceLevel];
-  if (filters.remote) input.workType = [filters.remote];
+  if (filters.contractType && CONTRACT_CODE[filters.contractType]) input.contractType = [CONTRACT_CODE[filters.contractType]];
+  if (filters.experienceLevel && EXP_CODE[filters.experienceLevel]) input.experienceLevel = [EXP_CODE[filters.experienceLevel]];
+  if (filters.remote && REMOTE_CODE[filters.remote]) input.workType = [REMOTE_CODE[filters.remote]];
 
   const results = await runActor<Record<string, unknown>>(JOBS_ACTOR, input);
 
