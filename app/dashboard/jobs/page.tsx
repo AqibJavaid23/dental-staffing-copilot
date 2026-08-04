@@ -16,11 +16,12 @@ const PLATFORMS = [
     available: true,
     filters: ["title", "location", "datePosted", "contractType", "experienceLevel", "remote", "limit"],
   },
-  { id: "indeed", label: "Indeed", available: false, filters: [] },
+  { id: "indeed", label: "Indeed", available: true, filters: ["title", "location", "fromDays", "limit"] },
   { id: "ziprecruiter", label: "ZipRecruiter", available: false, filters: [] },
 ];
 
 const DATE_OPTIONS = ["", "Past 24 hours", "Past week", "Past month"];
+const FROMDAYS_OPTIONS = [{ v: "1", l: "Past 24 hours" }, { v: "7", l: "Past week" }, { v: "14", l: "Past 2 weeks" }, { v: "30", l: "Past month" }];
 const CONTRACT_OPTIONS = ["", "Full-time", "Part-time", "Contract", "Temporary", "Internship"];
 const EXP_OPTIONS = ["", "Internship", "Entry level", "Associate", "Mid-Senior level", "Director", "Executive"];
 const REMOTE_OPTIONS = ["", "On-site", "Remote", "Hybrid"];
@@ -40,7 +41,7 @@ export default function JobsPage() {
   const [experienceLevel, setExperienceLevel] = useState("");
   const [remote, setRemote] = useState("");
   const [limit, setLimit] = useState(50);
-
+  const [fromDays, setFromDays] = useState("14");
   const [jobs, setJobs] = useState<JobPosting[]>([]);
   const [loading, setLoading] = useState(false);
   const [stage, setStage] = useState("");
@@ -57,7 +58,7 @@ export default function JobsPage() {
     setLoading(true); setError(null); setSearched(true); setSelected({});
     try {
       const results = await searchJobs(
-        { title, location, datePosted, contractType, experienceLevel, remote, limit },
+        { platform, title, location, datePosted, contractType, experienceLevel, remote, fromDays, limit },
         { onProgress: (s) => setStage(s) }
       );
       setJobs(results);
@@ -166,6 +167,14 @@ export default function JobsPage() {
                 <label className="block text-sm font-medium text-zinc-700 mb-1">Date posted</label>
                 <select value={datePosted} onChange={(e) => setDatePosted(e.target.value)} className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
                   {DATE_OPTIONS.map((o) => <option key={o} value={o}>{o || "Any time"}</option>)}
+                </select>
+              </div>
+            )}
+            {has("fromDays") && (
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">Date posted</label>
+                <select value={fromDays} onChange={(e) => setFromDays(e.target.value)} className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  {FROMDAYS_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
                 </select>
               </div>
             )}

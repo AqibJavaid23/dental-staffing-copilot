@@ -744,6 +744,7 @@ export async function lookupByName(first: string, last: string, state: string, c
 }
 // ---------- LinkedIn Job Postings (valig/linkedin-jobs-scraper) ----------
 const JOBS_ACTOR = process.env.NEXT_PUBLIC_APIFY_JOBS_ACTOR || "valig~linkedin-jobs-scraper";
+const INDEED_ACTOR = process.env.NEXT_PUBLIC_APIFY_INDEED_ACTOR || "borderline~indeed-scraper";
 
 export type JobPosting = {
   id: string;
@@ -760,12 +761,14 @@ export type JobPosting = {
 };
 
 export type JobFilters = {
+  platform?: string;
   title: string;
   location: string;
   datePosted?: string;
   contractType?: string;
   experienceLevel?: string;
   remote?: string;
+  fromDays?: string;
   limit?: number;
 };
 
@@ -773,31 +776,59 @@ export async function searchJobs(filters: JobFilters, options?: { onProgress?: P
   const progress = options?.onProgress || (() => {});
   if (!filters.title.trim()) throw new Error("Enter a job title (e.g. General Dentist).");
 
-  progress(`Searching LinkedIn jobs: ${filters.title}...`);
+  const platform = filters.platform || "linkedin";
+  progress(`Searching ${platform === "indeed" ? "Indeed" : "LinkedIn"} jobs: ${filters.title}...`);
 
+  // ---- INDEED ----
+  if (platform === "indeed") {
+    const input: Record<string, unknown> = {
+      query: filters.title.trim(),
+      location: filters.location.trim() || "United States",
+      country: "us",
+      maxRows: filters.limit || 50,
+      fromDays: filters.fromDays || "14",
+      sort: "date",
+      radius: "0",
+      enableUniqueJobs: true,
+    };
+    const results = await runActor<Record<string, unknown>>(INDEED_ACTOR, input);
+    return (results || []).map((j) => {
+      const loc = (j.location || {}) as { city?: string; state?: string; postalCode?: string };
+      const locText = [loc.city, loc.state].filter(Boolean).join(", ");
+      const jobTypeArr = Array.isArray(j.jobType) ? (j.jobType as string[]) : [];
+      return {
+        id: String(j.jobKey || j.jobUrl || Math.random()),
+        title: String(j.title || ""),
+        company: String(j.companyName || ""),
+        companyUrl: String(j.companyUrl || ""),
+        location: locText,
+        postedTimeAgo: String(j.age || ""),
+        postedDate: String(j.datePublished || ""),
+        contractType: jobTypeArr.join(", "),
+        experienceLevel: "",
+        url: String(j.jobUrl || ""),
+        description: String(j.descriptionText || ""),
+      };
+    });
+  }
+
+  // ---- LINKEDIN (default) ----
   const input: Record<string, unknown> = {
     title: filters.title.trim(),
     location: filters.location.trim() || "United States",
     rows: filters.limit || 50,
   };
-  // The actor expects coded values, not the display labels
-  const CONTRACT_CODE: Record<string, string> = {
-    "Full-time": "F", "Part-time": "P", "Contract": "C", "Temporary": "T", "Internship": "I", "Other": "O",
-  };
-  const EXP_CODE: Record<string, string> = {
-    "Internship": "1", "Entry level": "2", "Associate": "3", "Mid-Senior level": "4", "Director": "5", "Executive": "6",
-  };
-  const REMOTE_CODE: Record<string, string> = {
-    "On-site": "1", "Remote": "2", "Hybrid": "3",
-  };
-
   if (filters.datePosted) input.publishedAt = filters.datePosted;
+
+  const CONTRACT_CODE: Record<string, string> = { "Full-time": "F", "Part-time": "P", "Contract": "C", "Temporary": "T", "Internship": "I", "Other": "O" };
+  const EXP_CODE: Record<string, string> = { "Internship": "1", "Entry level": "2", "Associate": "3", "Mid-Senior level": "4", "Director": "5", "Executive": "6" };
+  const REMOTE_CODE: Record<string, string> = { "On-site": "1", "Remote": "2", "Hybrid": "3" };
+
   if (filters.contractType && CONTRACT_CODE[filters.contractType]) input.contractType = [CONTRACT_CODE[filters.contractType]];
   if (filters.experienceLevel && EXP_CODE[filters.experienceLevel]) input.experienceLevel = [EXP_CODE[filters.experienceLevel]];
   if (filters.remote && REMOTE_CODE[filters.remote]) input.workType = [REMOTE_CODE[filters.remote]];
 
   const results = await runActor<Record<string, unknown>>(JOBS_ACTOR, input);
-
   return (results || []).map((j) => ({
     id: String(j.id || j.url || Math.random()),
     title: String(j.title || ""),
