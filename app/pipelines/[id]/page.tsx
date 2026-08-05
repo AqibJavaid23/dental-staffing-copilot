@@ -17,7 +17,7 @@ type PipelineRow = {
   outreach_notes: string | null;
 };
 
-type Pipeline = { id: string; name: string; source_tab: string; project: string; created_at: string };
+type Pipeline = { id: string; name: string; source_tab: string; project: string; created_at: string; pipeline_type?: string | null };
 
 type LogEntry = {
   id: string;
@@ -231,6 +231,33 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
       setBusyStage("");
     }
   };
+  // Is this a Hiring (company) pipeline?
+  const isHiring = pipeline ? (pipeline.pipeline_type === "hiring" || (!pipeline.pipeline_type && pipeline.source_tab === "Jobs")) : false;
+
+  const sendToPool = async (row: PipelineRow) => {
+    const d = row.row_data;
+    const company = d["Business Name"] || d["Office Name"] || "";
+    if (!company) { alert("This row has no company/business name to create a pool from."); return; }
+    if (!confirm(`Create a pool for "${company}"${d["Job Title"] ? ` (${d["Job Title"]})` : ""}?`)) return;
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const { data: pool, error } = await supabase.from("pools").insert({
+        owner_id: sess.session?.user.id,
+        company_name: company,
+        job_title: d["Job Title"] || "",
+        city: d["City"] || "",
+        state: d["State"] || "",
+        job_url: d["Job URL"] || "",
+        source_row_id: row.id,
+      }).select().single();
+      if (error) throw error;
+      if (confirm("Pool created! Go to the pool now to add talent?")) {
+        router.push(`/dashboard/pools/${pool.id}`);
+      }
+    } catch (e) {
+      alert("Failed to create pool: " + (e instanceof Error ? e.message : "unknown"));
+    }
+  };
   const runFindPerson = async (row: PipelineRow) => {
     setPersonBusy(row.id);
     setBusyStage("Searching LinkedIn...");
@@ -400,6 +427,11 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-right">
                             <div className="flex gap-2 justify-end">
+                             {isHiring && (
+                                <button onClick={() => sendToPool(r)} className="px-3 py-1 text-xs font-medium bg-teal-600 text-white rounded-md hover:bg-teal-700 transition" title="Create a talent pool for this hiring company">
+                                  + Pool
+                                </button>
+                              )}
                               <button onClick={() => openLogOnly(r)} disabled={isBusy} className="px-3 py-1 text-xs font-medium border border-zinc-300 text-zinc-700 rounded-md hover:bg-zinc-50 transition disabled:opacity-40" title="Add a note to the outreach history">
                                 + Log
                               </button>

@@ -55,6 +55,13 @@ const CARDS = [
     desc: "Find dental job postings (hiring practices) on LinkedIn and more.",
     accent: "#0ea5e9",
   },
+{
+    href: "/dashboard/pools",
+    icon: "🤝",
+    title: "Talent Pools",
+    desc: "Match your talent to hiring practices and manage who to pitch where.",
+    accent: "#0d9488",
+  },
 ];
 
 const ROLE_LABEL: Record<string, string> = { admin: "Admin", manager: "Manager", member: "Member" };

@@ -83,7 +83,7 @@ export default function JobsPage() {
     try {
       const { data: pipeline, error: pErr } = await supabase
         .from("pipelines")
-        .insert({ name: pipelineName.trim(), source_tab: "Jobs", project: "DSCP", owner_id: profile.id })
+        .insert({ name: pipelineName.trim(), source_tab: "Jobs", project: "DSCP", owner_id: profile.id, pipeline_type: "hiring" })
         .select().single();
       if (pErr) throw pErr;
 

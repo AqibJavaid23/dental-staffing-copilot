@@ -12,14 +12,19 @@ type Pipeline = {
   source_tab: string;
   project: string;
   created_at: string;
+  pipeline_type: string | null;
   total: number;
   enriched: number;
 };
 
 const PROJECT_STYLES: Record<string, { label: string; classes: string }> = {
-  
+
   DSCP: { label: "DSCP", classes: "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300" },
 };
+
+// A pipeline's type: explicit override, else auto from source (Jobs = hiring, else talent)
+const typeOf = (p: { pipeline_type?: string | null; source_tab?: string }) =>
+  p.pipeline_type || (p.source_tab === "Jobs" ? "hiring" : "talent");
 
 function PipelinesInner() {
   const router = useRouter();
@@ -33,6 +38,9 @@ function PipelinesInner() {
   // Phase F: "view as user" picker
   const [viewableUsers, setViewableUsers] = useState<{ id: string; label: string; role: string }[]>([]);
   const [viewUserId, setViewUserId] = useState<string>("all");
+
+  // Talent / Hiring type filter
+  const [typeFilter, setTypeFilter] = useState<"all" | "talent" | "hiring">("all");
 
   const { profile, checking } = useAuth();
 
@@ -108,11 +116,19 @@ function PipelinesInner() {
     };
     loadUsers();
   }, [profile]);
+
   const deletePipeline = async (id: string, name: string) => {
     if (!confirm(`Delete pipeline "${name}"? This cannot be undone.`)) return;
     const { error } = await supabase.from("pipelines").delete().eq("id", id);
     if (error) { alert("Delete failed: " + error.message); return; }
     load();
+  };
+
+  // Manually change a pipeline's type (talent <-> hiring)
+  const changeType = async (id: string, newType: string) => {
+    const { error } = await supabase.from("pipelines").update({ pipeline_type: newType }).eq("id", id);
+    if (error) { alert("Failed to update type: " + error.message); return; }
+    setPipelines((prev) => prev.map((p) => (p.id === id ? { ...p, pipeline_type: newType } : p)));
   };
 
   const title =
@@ -123,6 +139,9 @@ function PipelinesInner() {
   const backLabel = projectFilter ? `← Back to ${projectFilter}` : "← Back";
   const emptyLink = "/dashboard/provider-database";
   const emptyLabel = "Go to Provider Database";
+
+  const visiblePipelines = pipelines.filter((p) => typeFilter === "all" || typeOf(p) === typeFilter);
+
 if (checking) return <div className="min-h-screen flex items-center justify-center bg-zinc-50"><BrandLoader label="Loading..." /></div>;
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50 dark:bg-zinc-900">
@@ -148,9 +167,24 @@ if (checking) return <div className="min-h-screen flex items-center justify-cent
 
       <main className="flex-1 p-6">
         <div className="max-w-5xl mx-auto space-y-4">
+          {/* Talent / Hiring filter */}
+          <div className="flex gap-2">
+            {([["all", "All"], ["talent", "🦷 Talent"], ["hiring", "🏢 Hiring Practices"]] as const).map(([val, label]) => (
+              <button
+                key={val}
+                onClick={() => setTypeFilter(val)}
+                className={`px-3 py-1.5 text-sm rounded-lg border transition ${
+                  typeFilter === val ? "bg-blue-600 text-white border-transparent" : "bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-300 dark:border-zinc-600 hover:bg-zinc-50 dark:hover:bg-zinc-700"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
           {error ? <div className="p-6 text-red-500 bg-red-50 dark:bg-red-900/20 rounded-lg">{error}</div>
          : loading ? <BrandLoader label="Loading pipelines..." />
-          : pipelines.length === 0 ? (
+          : visiblePipelines.length === 0 ? (
             <div className="text-center py-20">
               <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50 mb-2">No pipelines yet</h2>
               <p className="text-zinc-500 dark:text-zinc-400 mb-6">
@@ -162,21 +196,36 @@ if (checking) return <div className="min-h-screen flex items-center justify-cent
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {pipelines.map((p) => {
+              {visiblePipelines.map((p) => {
                 const pct = p.total > 0 ? Math.round((p.enriched / p.total) * 100) : 0;
                 const tag = PROJECT_STYLES[p.project] ?? { label: p.project, classes: "bg-zinc-100 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300" };
+                const ptype = typeOf(p);
                 return (
                   <div key={p.id} className="card-hover bg-white dark:bg-zinc-800 rounded-2xl shadow-sm border border-zinc-200 dark:border-zinc-700 p-5">
                     <div className="flex items-start justify-between gap-2 mb-3">
                       <Link href={`/pipelines/${p.id}`} className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${tag.classes}`}>{tag.label}</span>
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${ptype === "hiring" ? "bg-orange-100 text-orange-700" : "bg-sky-100 text-sky-700"}`}>
+                            {ptype === "hiring" ? "🏢 Hiring" : "🦷 Talent"}
+                          </span>
                           <span className="text-xs text-zinc-500 dark:text-zinc-400">{p.source_tab}s</span>
                         </div>
                         <h3 className="font-semibold text-zinc-900 dark:text-zinc-50 truncate hover:text-blue-600 dark:hover:text-blue-400 transition">{p.name}</h3>
                         <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{new Date(p.created_at).toLocaleDateString()}</p>
                       </Link>
-                      <button onClick={() => deletePipeline(p.id, p.name)} className="text-zinc-400 hover:text-red-500 transition text-sm" title="Delete">✕</button>
+                      <div className="flex flex-col items-end gap-1">
+                        <button onClick={() => deletePipeline(p.id, p.name)} className="text-zinc-400 hover:text-red-500 transition text-sm" title="Delete">✕</button>
+                        <select
+                          value={ptype}
+                          onChange={(e) => changeType(p.id, e.target.value)}
+                          className="text-[10px] border border-zinc-200 dark:border-zinc-600 rounded px-1 py-0.5 bg-white dark:bg-zinc-800 text-zinc-500"
+                          title="Change pipeline type"
+                        >
+                          <option value="talent">Talent</option>
+                          <option value="hiring">Hiring</option>
+                        </select>
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <div className="flex justify-between text-sm">
