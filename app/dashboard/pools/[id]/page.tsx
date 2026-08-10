@@ -6,7 +6,7 @@ import { supabase } from "@/app/lib/supabase";
 import { useAuth } from "@/app/lib/useAuth";
 import BrandLoader from "@/app/components/BrandLoader";
 import { type EnrichmentRecord } from "@/app/lib/enrich";
-
+import TalentContactPanel from "@/app/components/TalentContactPanel";
 type Pool = {
   id: string;
   company_name: string;
@@ -256,32 +256,15 @@ export default function PoolDetailPage({ params }: { params: Promise<{ id: strin
                             </tr>
                             {isExp && enr && (
                               <tr className="bg-zinc-50/50">
-                                <td colSpan={6} className="px-6 py-3">
-                                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
-                                    <div>
-                                      <div className="font-semibold text-zinc-500 uppercase mb-1">Person</div>
-                                      {enr.person_email && <div className="text-zinc-900 font-mono break-all">✉️ {enr.person_email}</div>}
-                                      {enr.person_linkedin_url && <a href={enr.person_linkedin_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Open LinkedIn →</a>}
-                                      {!enr.person_email && !enr.person_linkedin_url && <div className="text-zinc-400">none</div>}
-                                    </div>
-                                    <div>
-                                      <div className="font-semibold text-zinc-500 uppercase mb-1">NPPES</div>
-                                      {enr.npi_name && <div className="text-zinc-900">{enr.npi_name}</div>}
-                                      {enr.npi_specialty && <div className="text-zinc-600">{enr.npi_specialty}</div>}
-                                      {enr.npi_number && <div className="text-zinc-700 font-mono">{enr.npi_number}</div>}
-                                      {!enr.npi_name && <div className="text-zinc-400">none</div>}
-                                    </div>
-                                    <div>
-                                      <div className="font-semibold text-zinc-500 uppercase mb-1">Practice</div>
-                                      {enr.phone && <div className="text-zinc-700">📞 {enr.phone}</div>}
-                                      {enr.website && <a href={enr.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">🌐 Website</a>}
-                                      {!enr.phone && !enr.website && <div className="text-zinc-400">none</div>}
-                                    </div>
-                                    <div>
-                                      <div className="font-semibold text-zinc-500 uppercase mb-1">Emails</div>
-                                      {enr.emails && enr.emails.length > 0 ? enr.emails.map((em, i) => <div key={i} className="text-zinc-900 font-mono break-all">{em}</div>) : <div className="text-zinc-400">none</div>}
-                                    </div>
-                                  </div>
+                                <td colSpan={6} className="px-6 py-4">
+                                  <TalentContactPanel
+                                    licenseNumber={t.license_number || ""}
+                                    firstName={t.row_data?.["First Name"] || ""}
+                                    lastName={t.row_data?.["Last Name"] || ""}
+                                    city={t.city || t.row_data?.["City"] || ""}
+                                    enr={enr}
+                                    onRefresh={load}
+                                  />
                                 </td>
                               </tr>
                             )}
