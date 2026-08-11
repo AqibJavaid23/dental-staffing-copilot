@@ -249,6 +249,7 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
         state: d["State"] || "",
         job_url: d["Job URL"] || "",
         source_row_id: row.id,
+        company_license: (row.license_number || "").trim(),
       }).select().single();
       if (error) throw error;
       if (confirm("Pool created! Go to the pool now to add talent?")) {

@@ -52,6 +52,7 @@ export default function PoolDetailPage({ params }: { params: Promise<{ id: strin
   const [companyEnr, setCompanyEnr] = useState<EnrichmentRecord | null>(null);
   const [talentEnr, setTalentEnr] = useState<Record<string, EnrichmentRecord>>({});
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [companyOpen, setCompanyOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -171,40 +172,36 @@ export default function PoolDetailPage({ params }: { params: Promise<{ id: strin
                 {pool.job_url && <a href={pool.job_url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline mt-2 inline-block">View job posting →</a>}
               </div>
 
-              {/* Company Contact */}
+              {/* Company Contact — collapsible full enrichment panel */}
               <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-5">
-                <h3 className="font-semibold text-zinc-900 mb-3">Company Contact</h3>
-                {!pool.company_license ? (
-                  <p className="text-sm text-zinc-400">This pool has no linked company row to enrich.</p>
-                ) : !companyEnr ? (
-                  <p className="text-sm text-zinc-400">Not enriched yet. Run G-Maps / NPPES / Find Person on this company in its hiring pipeline.</p>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    <div className="space-y-1">
-                      <div className="text-xs font-semibold text-zinc-500 uppercase">Practice (G-Maps)</div>
-                      {companyEnr.matched_title && <div className="text-zinc-900">{companyEnr.matched_title}</div>}
-                      {companyEnr.phone && <div className="text-zinc-700">📞 {companyEnr.phone}</div>}
-                      {companyEnr.website && <div><a href={companyEnr.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">🌐 Website</a></div>}
-                      {companyEnr.emails && companyEnr.emails.length > 0 && companyEnr.emails.map((em, i) => <div key={i} className="text-zinc-900 font-mono text-xs break-all">{em}</div>)}
-                    </div>
-                    <div className="space-y-1">
-                      <div className="text-xs font-semibold text-zinc-500 uppercase">NPPES</div>
-                      {companyEnr.npi_name && <div className="text-zinc-900">{companyEnr.npi_name}</div>}
-                      {companyEnr.npi_number && <div className="text-zinc-700 font-mono text-xs">NPI: {companyEnr.npi_number}</div>}
-                      {companyEnr.npi_specialty && <div className="text-zinc-600 text-xs">{companyEnr.npi_specialty}</div>}
-                      {companyEnr.npi_address && <div className="text-zinc-600 text-xs">{companyEnr.npi_address}</div>}
-                      {!companyEnr.npi_name && <div className="text-zinc-400 text-xs">Not looked up</div>}
-                    </div>
-                    <div className="space-y-1">
-                      <div className="text-xs font-semibold text-zinc-500 uppercase">Decision-maker</div>
-                      {companyEnr.person_linkedin_url ? (
-                        <>
-                          {companyEnr.person_headline && <div className="text-zinc-600 text-xs">{companyEnr.person_headline}</div>}
-                          {companyEnr.person_email && <div className="text-zinc-900 font-mono text-xs break-all">{companyEnr.person_email}</div>}
-                          <a href={companyEnr.person_linkedin_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs">Open LinkedIn →</a>
-                        </>
-                      ) : <div className="text-zinc-400 text-xs">Use Find Person on the company row.</div>}
-                    </div>
+                <button
+                  onClick={() => setCompanyOpen((o) => !o)}
+                  className="w-full flex items-center justify-between text-left"
+                >
+                  <h3 className="font-semibold text-zinc-900">Company Contact</h3>
+                  <span className="flex items-center gap-2 text-xs text-zinc-500">
+                    {!pool.company_license ? "no company row"
+                      : !companyEnr ? "not enriched"
+                      : companyOpen ? "hide" : "show details"}
+                    <span className="text-zinc-400">{companyOpen ? "▾" : "▸"}</span>
+                  </span>
+                </button>
+                {companyOpen && (
+                  <div className="mt-3">
+                    {!pool.company_license ? (
+                      <p className="text-sm text-zinc-400">This pool has no linked company row to enrich.</p>
+                    ) : !companyEnr ? (
+                      <p className="text-sm text-zinc-400">Not enriched yet. Run G-Maps / NPPES / Find Person on this company in its hiring pipeline.</p>
+                    ) : (
+                      <TalentContactPanel
+                        licenseNumber={pool.company_license}
+                        firstName=""
+                        lastName=""
+                        city={pool.city || ""}
+                        enr={companyEnr}
+                        onRefresh={load}
+                      />
+                    )}
                   </div>
                 )}
               </div>

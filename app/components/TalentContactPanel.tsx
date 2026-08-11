@@ -67,7 +67,7 @@ export default function TalentContactPanel({
   };
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-sm [&>div]:min-w-0">
       {/* Person Contact — hybrid manual flow */}
       <div>
         <h4 className="font-semibold text-zinc-900 mb-2">Person Contact (LinkedIn)</h4>
@@ -177,11 +177,13 @@ export default function TalentContactPanel({
           )}
           {enr?.extra_phones && enr.extra_phones.length > 0 && (
             <div><dt className="text-zinc-500 mb-1">Additional phones:</dt>
-              {enr.extra_phones.map((p, i) => <dd key={i} className="text-zinc-900">{p}</dd>)}
+              <div className="max-h-24 overflow-y-auto pr-1">
+                {enr.extra_phones.map((p, i) => <dd key={i} className="text-zinc-900">{p}</dd>)}
+              </div>
             </div>
           )}
-          {enr?.facebooks && enr.facebooks.length > 0 && <div><dt className="inline text-zinc-500">Facebook: </dt>{enr.facebooks.map((u, i) => <a key={i} href={u} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline ml-1">link</a>)}</div>}
-          {enr?.instagrams && enr.instagrams.length > 0 && <div><dt className="inline text-zinc-500">Instagram: </dt>{enr.instagrams.map((u, i) => <a key={i} href={u} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline ml-1">link</a>)}</div>}
+          {enr?.facebooks && enr.facebooks.length > 0 && <div className="flex flex-wrap gap-x-1 items-baseline"><dt className="text-zinc-500">Facebook:</dt>{enr.facebooks.map((u, i) => <a key={i} href={u} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">link</a>)}</div>}
+          {enr?.instagrams && enr.instagrams.length > 0 && <div className="flex flex-wrap gap-x-1 items-baseline"><dt className="text-zinc-500">Instagram:</dt>{enr.instagrams.map((u, i) => <a key={i} href={u} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">link</a>)}</div>}
           {(!enr?.emails || enr.emails.length === 0) && (!enr?.extra_phones || enr.extra_phones.length === 0) && (
             <p className="text-zinc-400 italic">No contact details from website yet.</p>
           )}
