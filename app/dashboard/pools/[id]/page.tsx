@@ -7,6 +7,7 @@ import { useAuth } from "@/app/lib/useAuth";
 import BrandLoader from "@/app/components/BrandLoader";
 import { type EnrichmentRecord } from "@/app/lib/enrich";
 import TalentContactPanel from "@/app/components/TalentContactPanel";
+import TalentCRM from "@/app/components/TalentCRM";
 type Pool = {
   id: string;
   company_name: string;
@@ -262,6 +263,7 @@ export default function PoolDetailPage({ params }: { params: Promise<{ id: strin
                                     enr={enr}
                                     onRefresh={load}
                                   />
+                                  {t.pipeline_row_id && <TalentCRM pipelineRowId={t.pipeline_row_id} />}
                                 </td>
                               </tr>
                             )}

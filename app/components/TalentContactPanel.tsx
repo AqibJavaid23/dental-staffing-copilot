@@ -6,12 +6,6 @@ import { findEmailByUrl, savePersonUrlEmail, setSentFlag, type EnrichmentRecord 
 /**
  * Shared, self-contained enrichment panel — the same four sections used in the
  * pipeline detail page (Person Contact / NPPES / Google Maps / Website Scrape).
- *
- * Props:
- *  - licenseNumber: the row's license_number (key into the enrichments table)
- *  - firstName / lastName / city: used to build the "copy for LinkedIn" text
- *  - enr: the current EnrichmentRecord for this person (or null)
- *  - onRefresh: called after Get Email / toggle so the parent can re-fetch enrichments
  */
 export default function TalentContactPanel({
   licenseNumber,
