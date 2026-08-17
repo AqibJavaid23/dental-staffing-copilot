@@ -4,7 +4,7 @@ import { useEffect, useState, use, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/app/lib/supabase";
-import { enrichRow, smartSearchRescue, enrichRowNppes, checkRowInputQuality, findPerson, savePersonMatch, setSentFlag, findEmailByUrl, savePersonUrlEmail, type EnrichmentRecord, type PersonCandidate, type EmailResult } from "@/app/lib/enrich";
+import { enrichRow, smartSearchRescue, enrichRowNppes, checkRowInputQuality, findPerson, savePersonMatch, setSentFlag, findEmailByUrl, savePersonUrlEmail, type EnrichmentRecord, type PersonCandidate, type EmailResult , exportToHeyReachCsv } from "@/app/lib/enrich";
 import { useAuth } from "@/app/lib/useAuth";
 import BrandLoader from "@/app/components/BrandLoader";
 
@@ -337,7 +337,9 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
           )}
           <h1 className="text-lg font-semibold text-zinc-900 truncate">{pipeline?.name ?? "Pipeline"}</h1>
         </div>
-        <div className="w-32" />
+        <button onClick={() => exportToHeyReachCsv(rows, enrichments, pipeline?.name || "pipeline")} className="px-3 py-1.5 text-xs font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition whitespace-nowrap" title="Export rows with a LinkedIn URL to a HeyReach-ready CSV">
+          ⬇ Export to HeyReach
+        </button>
       </header>
 
       <main className="flex-1 p-6">

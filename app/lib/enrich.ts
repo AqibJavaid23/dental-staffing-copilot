@@ -843,3 +843,75 @@ export async function searchJobs(filters: JobFilters, options?: { onProgress?: P
     description: String(j.description || ""),
   }));
 }
+// ---------- Export pipeline rows to HeyReach CSV ----------
+type HeyReachRow = {
+  row_data: Record<string, string>;
+  license_number: string;
+};
+
+export function exportToHeyReachCsv(
+  rows: HeyReachRow[],
+  enrichments: Record<string, EnrichmentRecord>,
+  pipelineName: string
+): void {
+  // HeyReach's exact column order
+  const headers = [
+    "Profile URL", "First Name", "Last Name", "Full Name", "Headline",
+    "Enriched Email", "Custom Address", "Job Title", "Location", "Company",
+    "Company URL", "Tags", "Auto-tag", "Auto-tag Campaign Name",
+    "Auto-tag Campaign Id", "Auto-tag Sender Full Name", "Auto-tag Sender Id",
+    "Auto-tag Creation Time",
+  ];
+
+  const esc = (v: string) => {
+    const s = (v ?? "").toString();
+    // Quote if it contains comma, quote, or newline; double up internal quotes
+    if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    return s;
+  };
+
+  const lines: string[] = [headers.join(",")];
+  let included = 0;
+
+  for (const row of rows) {
+    const enr = enrichments[(row.license_number || "").trim()];
+    const linkedinUrl = enr?.person_linkedin_url || "";
+    // Only export people who have a LinkedIn profile URL
+    if (!linkedinUrl) continue;
+
+    const d = row.row_data || {};
+    const first = d["First Name"] || "";
+    const last = d["Last Name"] || "";
+    const fullName = [first, d["Middle Name"], last].filter(Boolean).join(" ");
+    const email = enr?.person_email || (enr?.emails && enr.emails.length > 0 ? enr.emails[0] : "") || "";
+    const location = [d["City"] || enr?.city, d["State"] || enr?.state].filter(Boolean).join(", ");
+    const company = d["Business Name"] || d["Office Name"] || enr?.matched_title || "";
+    const companyUrl = enr?.website || "";
+    const headline = enr?.person_headline || d["License Type"] || "";
+    const jobTitle = enr?.npi_specialty || d["License Type"] || "";
+
+    const values = [
+      linkedinUrl, first, last, fullName, headline,
+      email, "", jobTitle, location, company,
+      companyUrl, "", "", "", "", "", "", "",
+    ];
+    lines.push(values.map(esc).join(","));
+    included++;
+  }
+
+  if (included === 0) {
+    alert("No rows have a LinkedIn URL yet. Use 'Find Person' to add LinkedIn URLs first.");
+    return;
+  }
+
+  const csv = "\ufeff" + lines.join("\r\n"); // BOM for Excel/HeyReach compatibility
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${pipelineName.replace(/[^a-z0-9]+/gi, "_")}_heyreach.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
