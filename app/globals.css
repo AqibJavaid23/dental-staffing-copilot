@@ -131,3 +131,16 @@ a {
   color: rgba(255, 255, 255, 0.65);
   animation: splash-fade-in 0.8s ease 0.3s both;
 }
+html, body {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+/* Make wide tables scroll inside their container on small screens */
+@media (max-width: 768px) {
+  table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+}

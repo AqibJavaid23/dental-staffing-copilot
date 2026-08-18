@@ -61,7 +61,7 @@ export default function TalentContactPanel({
   };
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-sm [&>div]:min-w-0">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 text-sm [&>div]:min-w-0">
       {/* Person Contact — hybrid manual flow */}
       <div>
         <h4 className="font-semibold text-zinc-900 mb-2">Person Contact (LinkedIn)</h4>
