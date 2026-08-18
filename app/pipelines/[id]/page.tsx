@@ -338,7 +338,7 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
           <h1 className="text-lg font-semibold text-zinc-900 truncate">{pipeline?.name ?? "Pipeline"}</h1>
         </div>
         <button onClick={() => exportToHeyReachCsv(rows, enrichments, pipeline?.name || "pipeline")} className="px-3 py-1.5 text-xs font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition whitespace-nowrap" title="Export rows with a LinkedIn URL to a HeyReach-ready CSV">
-          ⬇ Export to HeyReach
+          ⬇ Export csv
         </button>
       </header>
 
