@@ -7,9 +7,9 @@ import BrandLoader from "@/app/components/BrandLoader";
 
 function greeting() {
   const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 18) return "Good afternoon";
-  return "Good evening";
+  if (h < 12) return "Good morning ☀️";
+  if (h < 18) return "Good afternoon 🌤️";
+  return "Good evening 🌙";
 }
 
 const CARDS = [
