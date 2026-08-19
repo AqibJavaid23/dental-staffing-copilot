@@ -4,7 +4,7 @@ import { useEffect, useState, use, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/app/lib/supabase";
-import { enrichRow, smartSearchRescue, enrichRowNppes, checkRowInputQuality, findPerson, savePersonMatch, setSentFlag, findEmailByUrl, savePersonUrlEmail, type EnrichmentRecord, type PersonCandidate, type EmailResult , exportToHeyReachCsv } from "@/app/lib/enrich";
+import { enrichRow, smartSearchRescue, enrichRowNppes, checkRowInputQuality, findPerson, savePersonMatch, setSentFlag, findEmailByUrl, savePersonUrlEmail, type EnrichmentRecord, type PersonCandidate, type EmailResult , exportToHeyReachCsv , findContactsApify, findContactsHunter, saveCompanyContacts, type CompanyContact , loadCompanyContacts } from "@/app/lib/enrich";
 import { useAuth } from "@/app/lib/useAuth";
 import BrandLoader from "@/app/components/BrandLoader";
 
@@ -69,6 +69,13 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmWeak, setConfirmWeak] = useState<{ row: PipelineRow; missing: string[] } | null>(null);
   const [personBusy, setPersonBusy] = useState<string | null>(null);
+  const [contactDialog, setContactDialog] = useState<PipelineRow | null>(null);
+  const [contactDomain, setContactDomain] = useState("");
+  const [contactBusy, setContactBusy] = useState<"apify" | "hunter" | null>(null);
+  const [foundContacts, setFoundContacts] = useState<CompanyContact[]>([]);
+  const [savedContacts, setSavedContacts] = useState<Record<string, CompanyContact[]>>({});
+  const [pickedContacts, setPickedContacts] = useState<Record<string, CompanyContact>>({});
+  const [hunterLeft, setHunterLeft] = useState<number | null>(null);
   const [personCandidates, setPersonCandidates] = useState<Record<string, PersonCandidate[]>>({});
   const [urlInput, setUrlInput] = useState<Record<string, string>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -98,6 +105,13 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
           if (licenseNums.has(key)) map[key] = e as EnrichmentRecord;
         });
         setEnrichments(map);
+              // Load any saved company contacts for these rows
+      const contactMap: Record<string, CompanyContact[]> = {};
+      await Promise.all([...licenseNums].map(async (ln) => {
+        const cs = await loadCompanyContacts(ln);
+        if (cs.length > 0) contactMap[ln] = cs;
+      }));
+      setSavedContacts(contactMap);
       }
 
       const rowIds = rowList.map((x) => x.id);
@@ -257,6 +271,59 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
       }
     } catch (e) {
       alert("Failed to create pool: " + (e instanceof Error ? e.message : "unknown"));
+    }
+  };
+    const openContacts = (row: PipelineRow) => {
+    const enr = enrichments[(row.license_number || "").trim()];
+    // Prefill domain from the enriched website if we have it
+    let domain = "";
+    if (enr?.website) domain = enr.website.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+    setContactDomain(domain);
+    setFoundContacts([]);
+    setPickedContacts({});
+    setContactDialog(row);
+  };
+  const loadSavedContactsFor = async (licenseNumber: string) => {
+    const contacts = await loadCompanyContacts(licenseNumber);
+    setSavedContacts((prev) => ({ ...prev, [licenseNumber.trim()]: contacts }));
+  };
+  const runContacts = async (source: "apify" | "hunter") => {
+    if (!contactDialog) return;
+    if (!contactDomain.trim()) { alert("Enter a domain first (e.g. example.com)."); return; }
+    setContactBusy(source);
+    try {
+      const results = source === "apify"
+        ? await findContactsApify(contactDomain, "Arizona")
+        : await findContactsHunter(contactDomain);
+      setFoundContacts(results);
+      setPickedContacts({});
+      if (results.length === 0) alert("No contacts found for that domain.");
+    } catch (e) {
+      alert("Lookup failed: " + (e instanceof Error ? e.message : "unknown"));
+    } finally {
+      setContactBusy(null);
+    }
+  };
+
+  const toggleContact = (c: CompanyContact) => {
+    setPickedContacts((prev) => {
+      const n = { ...prev };
+      if (n[c.email]) delete n[c.email]; else n[c.email] = c;
+      return n;
+    });
+  };
+
+  const saveContacts = async () => {
+    if (!contactDialog) return;
+    const chosen = Object.values(pickedContacts);
+    if (chosen.length === 0) return;
+    try {
+      await saveCompanyContacts(contactDialog.license_number, contactDomain.trim(), chosen);
+      alert(`Saved ${chosen.length} contact(s).`);
+      setContactDialog(null);
+      await loadSavedContactsFor(contactDialog.license_number);
+    } catch (e) {
+      alert("Save failed: " + (e instanceof Error ? e.message : "unknown"));
     }
   };
   const runFindPerson = async (row: PipelineRow) => {
@@ -430,12 +497,11 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-right">
                             <div className="flex gap-2 justify-end">
-                             {isHiring && (
-                                <button onClick={() => sendToPool(r)} className="px-3 py-1 text-xs font-medium bg-teal-600 text-white rounded-md hover:bg-teal-700 transition" title="Create a talent pool for this hiring company">
-                                  + Pool
+                           {isHiring && (
+                                <button onClick={() => openContacts(r)} className="px-3 py-1 text-xs font-medium bg-cyan-600 text-white rounded-md hover:bg-cyan-700 transition" title="Find email contacts at this company">
+                                  Find Contacts
                                 </button>
-                              )}
-                              <button onClick={() => openLogOnly(r)} disabled={isBusy} className="px-3 py-1 text-xs font-medium border border-zinc-300 text-zinc-700 rounded-md hover:bg-zinc-50 transition disabled:opacity-40" title="Add a note to the outreach history">
+                              )}  <button onClick={() => openLogOnly(r)} disabled={isBusy} className="px-3 py-1 text-xs font-medium border border-zinc-300 text-zinc-700 rounded-md hover:bg-zinc-50 transition disabled:opacity-40" title="Add a note to the outreach history">
                                 + Log
                               </button>
                               <button onClick={() => runNppes(r)} disabled={isBusy} className="px-3 py-1 text-xs font-medium bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition disabled:opacity-60 disabled:cursor-not-allowed" title="Free official registry lookup">
@@ -604,6 +670,22 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
                               </div>
 
                               {/* Outreach History (full width, below the four columns) */}
+                                                            {(savedContacts[(r.license_number || "").trim()]?.length ?? 0) > 0 && (
+                                <div className="mt-5 pt-4 border-t border-zinc-200">
+                                  <h4 className="font-semibold text-zinc-900 mb-2">Saved Contacts</h4>
+                                  <div className="space-y-1">
+                                    {savedContacts[(r.license_number || "").trim()].map((c, i) => (
+                                      <div key={i} className="text-xs flex items-center gap-2 flex-wrap">
+                                        <span className="font-mono text-zinc-900">{c.email}</span>
+                                        {c.name && <span className="text-zinc-500">· {c.name}</span>}
+                                        {c.title && <span className="text-zinc-500">· {c.title}</span>}
+                                        {c.confidence ? <span className="text-zinc-400">· {c.confidence}%</span> : null}
+                                        {c.source === "hunter" && <span className="text-[10px] text-amber-600 font-semibold">⭐ Hunter</span>}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                               <div className="mt-5 pt-4 border-t border-zinc-200">
                                 <h4 className="font-semibold text-zinc-900 mb-2">Outreach History</h4>
                                 {rowLogs.length > 0 ? (
@@ -678,6 +760,53 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
             <div className="flex justify-end gap-2 pt-2">
               <button onClick={() => setConfirmWeak(null)} className="px-4 py-2 text-sm text-zinc-600 hover:text-zinc-900 transition">Cancel</button>
               <button onClick={() => { const r = confirmWeak.row; setConfirmWeak(null); actuallyEnrich(r); }} className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">Enrich anyway</button>
+            </div>
+          </div>
+        </div>
+      )}
+            {contactDialog && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => contactBusy === null && setContactDialog(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="p-5 border-b border-zinc-200">
+              <h2 className="text-lg font-semibold text-zinc-900">Find Contacts</h2>
+              <p className="text-xs text-zinc-500 mt-0.5">{contactDialog.row_data["Business Name"] || contactDialog.row_data["Office Name"] || "Company"}</p>
+              <div className="flex gap-2 mt-3">
+                <input type="text" value={contactDomain} onChange={(e) => setContactDomain(e.target.value)} placeholder="company domain (e.g. rodeodental.com)" className="flex-1 px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div className="flex gap-2 mt-3">
+                <button onClick={() => runContacts("apify")} disabled={contactBusy !== null} className="flex-1 px-3 py-2 text-sm font-medium bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition disabled:opacity-50">
+                  {contactBusy === "apify" ? "Searching..." : "Find Contacts (free)"}
+                </button>
+                <button onClick={() => runContacts("hunter")} disabled={contactBusy !== null} className="flex-1 px-3 py-2 text-sm font-medium bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition disabled:opacity-50" title="Premium — verified people (limited)">
+                  {contactBusy === "hunter" ? "Searching..." : "⭐ Hunter"}{hunterLeft !== null ? ` (${hunterLeft}/50)` : ""}
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2">
+              {foundContacts.length === 0 ? (
+                <div className="p-8 text-center text-zinc-400 text-sm">Enter a domain and search. Free = emails only; Hunter = verified people with names & titles.</div>
+              ) : (
+                foundContacts.map((c) => {
+                  const isSel = !!pickedContacts[c.email];
+                  return (
+                    <button key={c.email} onClick={() => toggleContact(c)} className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 transition ${isSel ? "bg-blue-50" : "hover:bg-zinc-50"}`}>
+                      <input type="checkbox" checked={isSel} readOnly className="h-4 w-4 rounded border-zinc-300 text-blue-600" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-mono text-zinc-900 break-all">{c.email}</div>
+                        {(c.name || c.title) && <div className="text-xs text-zinc-500">{[c.name, c.title].filter(Boolean).join(" · ")}{c.confidence ? ` · ${c.confidence}%` : ""}</div>}
+                      </div>
+                      {c.source === "hunter" && <span className="text-[10px] text-amber-600 font-semibold">⭐</span>}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+            <div className="p-4 border-t border-zinc-200 flex justify-between items-center">
+              <span className="text-sm text-zinc-500">{Object.keys(pickedContacts).length} selected</span>
+              <div className="flex gap-2">
+                <button onClick={() => setContactDialog(null)} disabled={contactBusy !== null} className="px-4 py-2 text-sm text-zinc-600 hover:text-zinc-900 transition disabled:opacity-40">Close</button>
+                <button onClick={saveContacts} disabled={Object.keys(pickedContacts).length === 0} className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-40">Save selected</button>
+              </div>
             </div>
           </div>
         </div>

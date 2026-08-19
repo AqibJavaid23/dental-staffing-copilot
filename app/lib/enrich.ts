@@ -915,3 +915,60 @@ export function exportToHeyReachCsv(
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+// ---------- Find company contacts by domain (Apify + Hunter) ----------
+const EMAIL_DOMAIN_ACTOR = process.env.NEXT_PUBLIC_APIFY_EMAIL_DOMAIN_ACTOR || "burbn~email-search-api";
+
+export type CompanyContact = {
+  email: string;
+  name: string;
+  title: string;
+  confidence: number;
+  source: string;
+};
+
+// Apify: returns emails at a domain (no names/titles)
+export async function findContactsApify(domain: string, query = "Arizona"): Promise<CompanyContact[]> {
+  const clean = domain.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+  if (!clean) throw new Error("Enter a domain (e.g. example.com).");
+
+  const results = await runActor<{ email?: string; domain?: string }>(EMAIL_DOMAIN_ACTOR, {
+    emailDomain: clean,
+    query,
+    limit: 50,
+  });
+
+  return (results || [])
+    .filter((r) => r.email)
+    .map((r) => ({ email: r.email || "", name: "", title: "", confidence: 0, source: "apify" }));
+}
+
+// Hunter: returns real people (name, title, confidence) via our server route
+export async function findContactsHunter(domain: string): Promise<CompanyContact[]> {
+  const clean = domain.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+  if (!clean) throw new Error("Enter a domain (e.g. example.com).");
+
+  const res = await fetch(`/api/hunter?domain=${encodeURIComponent(clean)}`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.error || "Hunter lookup failed");
+
+  return (data.people || []).map((p: { email: string; name: string; title: string; confidence: number }) => ({
+    email: p.email, name: p.name || "", title: p.title || "", confidence: p.confidence || 0, source: "hunter",
+  }));
+}
+
+// Save picked contacts for a company (by license_number)
+export async function saveCompanyContacts(licenseNumber: string, domain: string, contacts: CompanyContact[]): Promise<void> {
+  if (contacts.length === 0) return;
+  const records = contacts.map((c) => ({
+    license_number: licenseNumber, domain, email: c.email, name: c.name || null,
+    title: c.title || null, confidence: c.confidence || null, source: c.source,
+  }));
+  const { error } = await supabase.from("company_contacts").insert(records);
+  if (error) throw error;
+}
+
+// Load saved contacts for a company
+export async function loadCompanyContacts(licenseNumber: string): Promise<CompanyContact[]> {
+  const { data } = await supabase.from("company_contacts").select("*").eq("license_number", licenseNumber).order("created_at");
+  return (data || []).map((c) => ({ email: c.email, name: c.name || "", title: c.title || "", confidence: c.confidence || 0, source: c.source || "" }));
+}
