@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth, signOut } from "@/app/lib/useAuth";
 import BrandLoader from "@/app/components/BrandLoader";
-
+import MyWeek from "@/app/components/MyWeek";
 function greeting() {
   const h = new Date().getHours();
   if (h < 12) return "Good morning ☀️";
@@ -99,6 +99,7 @@ export default function Dashboard() {
           </div>
 
           <div className="relative">
+                      {profile && <MyWeek userId={profile.id} />}
             {canLeft && (
               <button onClick={() => slide("left")} className="absolute -left-3 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white shadow-lg border border-zinc-200 flex items-center justify-center text-zinc-600 hover:text-zinc-900 hover:shadow-xl transition" aria-label="Scroll left">‹</button>
             )}
