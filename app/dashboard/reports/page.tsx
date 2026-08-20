@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { useAuth } from "@/app/lib/useAuth";
 import BrandLoader from "@/app/components/BrandLoader";
+import KanbanBoard from "@/app/components/KanbanBoard";
 
 type Report = {
   id: string;
@@ -35,6 +36,7 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [view, setView] = useState<"list" | "kanban">("list");
 
   const isManagerOrAdmin = profile?.role === "manager" || profile?.role === "admin";
 
@@ -46,7 +48,6 @@ export default function ReportsPage() {
       if (profile.role === "member") {
         query = query.eq("owner_id", profile.id);
       } else if (profile.role === "manager") {
-        // Find groups I manage
         const { data: myGroups } = await supabase
           .from("group_members")
           .select("group_id")
@@ -54,7 +55,6 @@ export default function ReportsPage() {
           .eq("role_in_group", "manager");
         const groupIds = (myGroups ?? []).map((g) => g.group_id);
 
-        // Find members in those groups
         let memberIds: string[] = [];
         if (groupIds.length > 0) {
           const { data: mems } = await supabase
@@ -65,7 +65,6 @@ export default function ReportsPage() {
           memberIds = (mems ?? []).map((m) => m.user_id);
         }
 
-        // Manager sees their own reports + their group members' reports
         const ids = [profile.id, ...memberIds];
         query = query.in("owner_id", ids);
       }
@@ -129,6 +128,13 @@ export default function ReportsPage() {
 
       <main className="flex-1 p-6">
         <div className="max-w-4xl mx-auto space-y-5">
+          {/* List / Kanban toggle */}
+          <div className="flex gap-1 bg-zinc-100 rounded-lg p-1 w-fit">
+            <button onClick={() => setView("list")} className={`px-3 py-1.5 text-sm font-medium rounded-md transition ${view === "list" ? "bg-white shadow-sm text-zinc-900" : "text-zinc-500"}`}>List</button>
+            <button onClick={() => setView("kanban")} className={`px-3 py-1.5 text-sm font-medium rounded-md transition ${view === "kanban" ? "bg-white shadow-sm text-zinc-900" : "text-zinc-500"}`}>Kanban</button>
+          </div>
+
+          {/* Create buttons (both views) */}
           <div className="flex gap-2 flex-wrap">
             <button onClick={() => createReport("weekly", false)} disabled={creating} className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50">+ Weekly Report</button>
             <button onClick={() => createReport("ongoing", false)} disabled={creating} className="px-4 py-2 text-sm font-medium border border-zinc-300 text-zinc-700 rounded-lg hover:bg-zinc-50 transition disabled:opacity-50">+ Task Plan</button>
@@ -137,41 +143,47 @@ export default function ReportsPage() {
             )}
           </div>
 
-          {error ? <div className="p-6 text-red-500 bg-red-50 rounded-lg">{error}</div>
-          : loading ? <BrandLoader label="Loading reports..." />
-          : reports.length === 0 ? (
-            <div className="text-center py-16 text-zinc-400">No reports yet. {profile?.role === "member" ? "Create your weekly plan above." : "Create a report or your own task above."}</div>
-          ) : (
-            <div className="space-y-3">
-              {reports.map((r) => {
-                const st = STATUS_STYLE[r.status] || STATUS_STYLE.draft;
-                const pct = r.itemCount ? Math.round((r.doneCount! / r.itemCount) * 100) : 0;
-                return (
-                  <Link key={r.id} href={`/dashboard/reports/${r.id}`} className="block bg-white rounded-2xl shadow-sm border border-zinc-200 p-5 hover:shadow-md transition">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${st.classes}`}>{st.label}</span>
-                          {r.is_manager_task && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">My Task</span>}
-                          {!r.is_manager_task && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-600">{r.kind === "weekly" ? "Weekly" : "Task"}</span>}
-                          {profile?.role !== "member" && <span className="text-xs text-zinc-500">{r.ownerName}</span>}
-                        </div>
-                        <h3 className="font-semibold text-zinc-900 truncate">{r.title}</h3>
-                        <p className="text-xs text-zinc-400 mt-0.5">{new Date(r.created_at).toLocaleDateString()}</p>
-                      </div>
-                      {(r.itemCount ?? 0) > 0 && (
-                        <div className="text-right shrink-0">
-                          <div className="text-sm font-medium text-zinc-900">{r.doneCount}/{r.itemCount}</div>
-                          <div className="w-20 h-1.5 bg-zinc-100 rounded-full overflow-hidden mt-1">
-                            <div className="h-full bg-emerald-500" style={{ width: `${pct}%` }} />
+          {/* KANBAN VIEW */}
+          {view === "kanban" && profile && <KanbanBoard profile={profile} />}
+
+          {/* LIST VIEW */}
+          {view === "list" && (
+            error ? <div className="p-6 text-red-500 bg-red-50 rounded-lg">{error}</div>
+            : loading ? <BrandLoader label="Loading reports..." />
+            : reports.length === 0 ? (
+              <div className="text-center py-16 text-zinc-400">No reports yet. {profile?.role === "member" ? "Create your weekly plan above." : "Create a report or your own task above."}</div>
+            ) : (
+              <div className="space-y-3">
+                {reports.map((r) => {
+                  const st = STATUS_STYLE[r.status] || STATUS_STYLE.draft;
+                  const pct = r.itemCount ? Math.round((r.doneCount! / r.itemCount) * 100) : 0;
+                  return (
+                    <Link key={r.id} href={`/dashboard/reports/${r.id}`} className="block bg-white rounded-2xl shadow-sm border border-zinc-200 p-5 hover:shadow-md transition">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${st.classes}`}>{st.label}</span>
+                            {r.is_manager_task && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">My Task</span>}
+                            {!r.is_manager_task && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-600">{r.kind === "weekly" ? "Weekly" : "Task"}</span>}
+                            {profile?.role !== "member" && <span className="text-xs text-zinc-500">{r.ownerName}</span>}
                           </div>
+                          <h3 className="font-semibold text-zinc-900 truncate">{r.title}</h3>
+                          <p className="text-xs text-zinc-400 mt-0.5">{new Date(r.created_at).toLocaleDateString()}</p>
                         </div>
-                      )}
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
+                        {(r.itemCount ?? 0) > 0 && (
+                          <div className="text-right shrink-0">
+                            <div className="text-sm font-medium text-zinc-900">{r.doneCount}/{r.itemCount}</div>
+                            <div className="w-20 h-1.5 bg-zinc-100 rounded-full overflow-hidden mt-1">
+                              <div className="h-full bg-emerald-500" style={{ width: `${pct}%` }} />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            )
           )}
         </div>
       </main>
