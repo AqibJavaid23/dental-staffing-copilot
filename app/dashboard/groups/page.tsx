@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/app/lib/supabase";
 import { useAuth } from "@/app/lib/useAuth";
 import BrandLoader from "@/app/components/BrandLoader";
+import AdminProgress from "@/app/components/AdminProgress";
 
 type Profile = { id: string; full_name: string | null; email: string; role: string };
 type GroupMember = { id: string; user_id: string; role_in_group: string };
@@ -26,7 +27,6 @@ export default function GroupsPage() {
     const p = people.find((x) => x.id === uid);
     return p ? (p.full_name || p.email) : "Unknown";
   };
-  const roleOf = (uid: string) => people.find((x) => x.id === uid)?.role || "";
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -191,7 +191,12 @@ export default function GroupsPage() {
 
           {/* ADMIN: the tree */}
           {isAdmin && (
+            
             <div>
+               <div className="mb-6">
+                <h3 className="font-semibold text-zinc-900 mb-3">Team Progress</h3>
+                <AdminProgress />
+              </div>
               <h3 className="font-semibold text-zinc-900 mb-3">All Groups (Admin)</h3>
               {groups.length === 0 ? <p className="text-sm text-zinc-400">No groups yet.</p> : (
                 <div className="space-y-3">
