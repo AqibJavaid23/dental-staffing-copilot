@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { useAuth } from "@/app/lib/useAuth";
 import BrandLoader from "@/app/components/BrandLoader";
+import ItemComments from "@/app/components/ItemComments";
 
 type Report = {
   id: string;
@@ -29,12 +30,26 @@ type Item = {
   sort_order: number;
 };
 
+type Activity = {
+  id: string;
+  actor_name: string | null;
+  action: string;
+  detail: string | null;
+  created_at: string;
+};
+
 const PRIORITY = {
   low: { label: "Low", classes: "bg-emerald-100 text-emerald-700", dot: "#059669" },
   mid: { label: "Mid", classes: "bg-amber-100 text-amber-700", dot: "#d97706" },
   high: { label: "High", classes: "bg-red-100 text-red-700", dot: "#dc2626" },
 };
 const prio = (p: string) => PRIORITY[p as keyof typeof PRIORITY] || PRIORITY.mid;
+
+function fmtActivity(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + ", " +
+    d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
 
 export default function ReportDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -44,6 +59,7 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
   const [report, setReport] = useState<Report | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [ownerName, setOwnerName] = useState("");
+  const [activity, setActivity] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,10 +70,19 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
 
   const isOwner = profile && report && profile.id === report.owner_id;
   const isManagerOrAdmin = profile?.role === "manager" || profile?.role === "admin";
-  // Manager reviewing someone else's report (not their own task)
   const canReview = isManagerOrAdmin && report && !report.is_manager_task;
-  // Manager building their own task
   const isOwnManagerTask = isManagerOrAdmin && report?.is_manager_task && isOwner;
+
+  const logActivity = async (action: string, detail: string) => {
+    if (!profile) return;
+    await supabase.from("report_activity").insert({
+      report_id: id,
+      actor_id: profile.id,
+      actor_name: profile.full_name || profile.email || "User",
+      action,
+      detail,
+    });
+  };
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -73,6 +98,9 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
 
       const { data: prof } = await supabase.from("profiles").select("full_name, email").eq("id", r.owner_id).maybeSingle();
       setOwnerName(prof?.full_name || prof?.email || "Unknown");
+
+      const { data: acts } = await supabase.from("report_activity").select("*").eq("report_id", id).order("created_at", { ascending: false });
+      setActivity((acts ?? []) as Activity[]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load report");
     } finally { setLoading(false); }
@@ -80,7 +108,6 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
 
   useEffect(() => { load(); }, [load]);
 
-  // Member: save plan text
   const savePlan = async () => {
     setSaving(true);
     await supabase.from("reports").update({ plan_text: planDraft, updated_at: new Date().toISOString() }).eq("id", id);
@@ -88,22 +115,23 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
     load();
   };
 
-  // Member: submit for review
   const submitReport = async () => {
     if (!planDraft.trim()) { alert("Write your plan first."); return; }
     setSaving(true);
     await supabase.from("reports").update({ plan_text: planDraft, status: "submitted", submitted_at: new Date().toISOString() }).eq("id", id);
+    await logActivity("submitted", "submitted the plan for review");
     setSaving(false);
     load();
   };
 
-  // Manager: add a checklist item
   const addItem = async () => {
     if (!newItem.trim()) return;
+    const label = newItem.trim();
     const { error: e } = await supabase.from("report_items").insert({
-      report_id: id, content: newItem.trim(), priority: "mid", sort_order: items.length,
+      report_id: id, content: label, priority: "mid", sort_order: items.length,
     });
     if (e) { alert("Failed: " + e.message); return; }
+    await logActivity("item_added", `added a task: ${label}`);
     setNewItem("");
     load();
   };
@@ -118,7 +146,6 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
     load();
   };
 
-  // Manager: approve (requires every item to have a deadline)
   const approve = async () => {
     if (items.length === 0) { alert("Add at least one checklist item before approving."); return; }
     const missingDeadline = items.some((it) => !it.deadline);
@@ -128,21 +155,27 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
       status: "approved", manager_note: managerNote || null,
       approved_at: new Date().toISOString(), approved_by: profile?.id,
     }).eq("id", id);
+    await logActivity("approved", "approved the checklist");
     setSaving(false);
     load();
   };
 
-  // Member: toggle done
   const toggleDone = async (itemId: string, done: boolean) => {
     await supabase.from("report_items").update({ done: !done }).eq("id", itemId);
     const updated = items.map((it) => (it.id === itemId ? { ...it, done: !done } : it));
     setItems(updated);
-    // Auto-complete the report when all items done
+    if (!done) {
+      const it = updated.find((x) => x.id === itemId);
+      await logActivity("item_completed", `completed: ${it?.content ?? "a task"}`);
+    }
     if (updated.length > 0 && updated.every((it) => it.done)) {
       await supabase.from("reports").update({ status: "completed" }).eq("id", id);
+      await logActivity("completed", "completed the whole report");
       load();
     } else if (report?.status === "completed") {
       await supabase.from("reports").update({ status: "approved" }).eq("id", id);
+      load();
+    } else {
       load();
     }
   };
@@ -151,7 +184,6 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
   if (error) return <div className="min-h-screen flex items-center justify-center bg-zinc-50"><div className="p-6 text-red-500 bg-red-50 rounded-lg">{error}</div></div>;
   if (!report) return <div className="min-h-screen flex items-center justify-center bg-zinc-50 text-zinc-400">Report not found.</div>;
 
-  // Editing mode for building checklist = manager reviewing a submitted report, OR manager on their own task
   const canEditItems = (canReview && (report.status === "submitted" || report.status === "approved")) || isOwnManagerTask;
   const memberCanEditPlan = isOwner && !report.is_manager_task && (report.status === "draft");
 
@@ -175,7 +207,7 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
             <h2 className="text-2xl font-semibold text-zinc-900">{report.title}</h2>
           </div>
 
-          {/* Plan text — member writes here (not for manager's own tasks) */}
+          {/* Plan text */}
           {!report.is_manager_task && (
             <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-6">
               <h3 className="font-semibold text-zinc-900 mb-3">The Plan</h3>
@@ -227,6 +259,7 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
                             </>
                           )}
                         </div>
+                        {profile && <ItemComments itemId={it.id} reportId={report.id} authorId={profile.id} authorName={profile.full_name || profile.email || "User"} />}
                       </div>
                     </div>
                   );
@@ -242,7 +275,7 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
             )}
           </div>
 
-          {/* Manager review actions (only when reviewing someone's submitted/approved report) */}
+          {/* Manager review */}
           {canReview && (report.status === "submitted" || report.status === "approved") && (
             <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-6">
               <h3 className="font-semibold text-zinc-900 mb-3">Manager Review</h3>
@@ -260,6 +293,27 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
               <p className="text-sm text-zinc-700">{report.manager_note}</p>
             </div>
           )}
+
+          {/* Activity timeline */}
+          <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-6">
+            <h3 className="font-semibold text-zinc-900 mb-3">Activity</h3>
+            {activity.length === 0 ? (
+              <p className="text-sm text-zinc-400 italic">No activity yet.</p>
+            ) : (
+              <ol className="space-y-2">
+                {activity.map((a) => (
+                  <li key={a.id} className="text-xs flex items-start gap-2">
+                    <span className="text-zinc-300 mt-0.5">•</span>
+                    <div>
+                      <span className="font-medium text-zinc-700">{a.actor_name || "Someone"}</span>
+                      <span className="text-zinc-600"> {a.detail || a.action}</span>
+                      <span className="text-zinc-400 ml-1">· {fmtActivity(a.created_at)}</span>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
         </div>
       </main>
     </div>
