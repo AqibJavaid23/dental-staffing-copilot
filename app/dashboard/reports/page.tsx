@@ -46,8 +46,27 @@ export default function ReportsPage() {
       if (profile.role === "member") {
         query = query.eq("owner_id", profile.id);
       } else if (profile.role === "manager") {
-        const { data: members } = await supabase.from("profiles").select("id").eq("role", "member");
-        const ids = [profile.id, ...(members ?? []).map((m) => m.id)];
+        // Find groups I manage
+        const { data: myGroups } = await supabase
+          .from("group_members")
+          .select("group_id")
+          .eq("user_id", profile.id)
+          .eq("role_in_group", "manager");
+        const groupIds = (myGroups ?? []).map((g) => g.group_id);
+
+        // Find members in those groups
+        let memberIds: string[] = [];
+        if (groupIds.length > 0) {
+          const { data: mems } = await supabase
+            .from("group_members")
+            .select("user_id")
+            .in("group_id", groupIds)
+            .eq("role_in_group", "member");
+          memberIds = (mems ?? []).map((m) => m.user_id);
+        }
+
+        // Manager sees their own reports + their group members' reports
+        const ids = [profile.id, ...memberIds];
         query = query.in("owner_id", ids);
       }
       const { data, error: e } = await query;
