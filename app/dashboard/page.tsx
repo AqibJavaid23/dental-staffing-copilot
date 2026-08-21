@@ -1,5 +1,5 @@
 "use client";
-
+import NotificationBell from "@/app/components/NotificationBell";
 import { useRef, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -75,7 +75,9 @@ export default function Dashboard() {
             DENTAL STAFFING <span className="font-medium" style={{ color: "var(--brand-blue)" }}>CO-PILOT</span>
           </h1>
         </div>
-                <div className="flex items-center gap-4">
+        
+          <div className="flex items-center gap-4">
+          {profile && <NotificationBell userId={profile.id} />}
           <Link href="/dashboard/groups" className="text-sm font-medium" style={{ color: "var(--brand-blue)" }}>Groups</Link>
           {profile && profile.role !== "member" && (
             <Link href="/team" className="text-sm font-medium" style={{ color: "var(--brand-blue)" }}>Team</Link>
