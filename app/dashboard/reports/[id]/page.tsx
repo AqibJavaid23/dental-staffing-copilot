@@ -7,7 +7,7 @@ import { supabase } from "@/app/lib/supabase";
 import { useAuth } from "@/app/lib/useAuth";
 import BrandLoader from "@/app/components/BrandLoader";
 import ItemComments from "@/app/components/ItemComments";
-
+import { notify } from "@/app/lib/notify";
 type Report = {
   id: string;
   owner_id: string;
@@ -120,15 +120,24 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
     load();
   };
 
-  const submitReport = async () => {
+    const submitReport = async () => {
+    console.log("SUBMIT CLICKED — submitTo is:", submitTo);
     if (!planDraft.trim()) { alert("Write your plan first."); return; }
     if (!submitTo) { alert("Choose who to submit this to (a manager or admin)."); return; }
-    setSaving(true);
-    await supabase.from("reports").update({
+    setSaving(true);  await supabase.from("reports").update({
       plan_text: planDraft, status: "submitted", submitted_at: new Date().toISOString(), submitted_to: submitTo,
     }).eq("id", id);
     const mgrName = managers.find((m) => m.id === submitTo);
     await logActivity("submitted", `submitted the plan to ${mgrName?.full_name || mgrName?.email || "a manager"}`);
+        if (submitTo) {
+      await notify(
+        submitTo,
+        `${profile?.full_name || profile?.email || "A member"} submitted a plan for your review: "${report?.title || "Report"}"`,
+        `/dashboard/reports/${id}`,
+        "submitted",
+        profile?.full_name || profile?.email || undefined
+      );
+    }
     setSaving(false);
     load();
   };
@@ -165,6 +174,15 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
       approved_at: new Date().toISOString(), approved_by: profile?.id,
     }).eq("id", id);
     await logActivity("approved", "approved the checklist");
+        if (report?.owner_id && report.owner_id !== profile?.id) {
+      await notify(
+        report.owner_id,
+        `Your plan "${report.title}" was approved by ${profile?.full_name || profile?.email || "your manager"}. Your checklist is ready.`,
+        `/dashboard/reports/${id}`,
+        "approved",
+        profile?.full_name || profile?.email || undefined
+      );
+    }
     setSaving(false);
     load();
   };
@@ -180,6 +198,15 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
     if (updated.length > 0 && updated.every((it) => it.done)) {
       await supabase.from("reports").update({ status: "completed" }).eq("id", id);
       await logActivity("completed", "completed the whole report");
+            if (report?.submitted_to && report.submitted_to !== profile?.id) {
+        await notify(
+          report.submitted_to,
+          `${profile?.full_name || profile?.email || "A member"} completed all tasks in "${report.title}".`,
+          `/dashboard/reports/${id}`,
+          "completed",
+          profile?.full_name || profile?.email || undefined
+        );
+      }
       load();
     } else if (report?.status === "completed") {
       await supabase.from("reports").update({ status: "approved" }).eq("id", id);
