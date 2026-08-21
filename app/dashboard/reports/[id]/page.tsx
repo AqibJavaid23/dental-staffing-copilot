@@ -17,6 +17,7 @@ type Report = {
   status: string;
   is_manager_task: boolean;
   manager_note: string | null;
+  submitted_to: string | null;
   created_at: string;
 };
 
@@ -67,7 +68,8 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
   const [saving, setSaving] = useState(false);
   const [newItem, setNewItem] = useState("");
   const [managerNote, setManagerNote] = useState("");
-
+  const [managers, setManagers] = useState<{ id: string; full_name: string | null; email: string }[]>([]);
+  const [submitTo, setSubmitTo] = useState("");
   const isOwner = profile && report && profile.id === report.owner_id;
   const isManagerOrAdmin = profile?.role === "manager" || profile?.role === "admin";
   const canReview = isManagerOrAdmin && report && !report.is_manager_task;
@@ -99,8 +101,11 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
       const { data: prof } = await supabase.from("profiles").select("full_name, email").eq("id", r.owner_id).maybeSingle();
       setOwnerName(prof?.full_name || prof?.email || "Unknown");
 
-      const { data: acts } = await supabase.from("report_activity").select("*").eq("report_id", id).order("created_at", { ascending: false });
-      setActivity((acts ?? []) as Activity[]);
+
+            // Load all managers + admins for the submit-to dropdown
+      const { data: mgrs } = await supabase.from("profiles").select("id, full_name, email").in("role", ["manager", "admin"]);
+      setManagers((mgrs ?? []) as { id: string; full_name: string | null; email: string }[]);
+      if (r.submitted_to) setSubmitTo(r.submitted_to);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load report");
     } finally { setLoading(false); }
@@ -117,9 +122,13 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
 
   const submitReport = async () => {
     if (!planDraft.trim()) { alert("Write your plan first."); return; }
+    if (!submitTo) { alert("Choose who to submit this to (a manager or admin)."); return; }
     setSaving(true);
-    await supabase.from("reports").update({ plan_text: planDraft, status: "submitted", submitted_at: new Date().toISOString() }).eq("id", id);
-    await logActivity("submitted", "submitted the plan for review");
+    await supabase.from("reports").update({
+      plan_text: planDraft, status: "submitted", submitted_at: new Date().toISOString(), submitted_to: submitTo,
+    }).eq("id", id);
+    const mgrName = managers.find((m) => m.id === submitTo);
+    await logActivity("submitted", `submitted the plan to ${mgrName?.full_name || mgrName?.email || "a manager"}`);
     setSaving(false);
     load();
   };
@@ -216,9 +225,16 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
                   <textarea value={planDraft} onChange={(e) => setPlanDraft(e.target.value)} rows={6}
                     placeholder="In plain English, describe what you plan to work on this week..."
                     className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+                  <div className="mt-3">
+                    <label className="block text-xs font-medium text-zinc-500 mb-1">Submit to</label>
+                    <select value={submitTo} onChange={(e) => setSubmitTo(e.target.value)} className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="">Choose a manager or admin...</option>
+                      {managers.map((m) => <option key={m.id} value={m.id}>{m.full_name || m.email}</option>)}
+                    </select>
+                  </div>
                   <div className="flex gap-2 mt-3">
                     <button onClick={savePlan} disabled={saving} className="px-4 py-2 text-sm font-medium border border-zinc-300 text-zinc-700 rounded-lg hover:bg-zinc-50 transition disabled:opacity-50">{saving ? "Saving..." : "Save Draft"}</button>
-                    <button onClick={submitReport} disabled={saving} className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50">Submit to Manager</button>
+                    <button onClick={submitReport} disabled={saving} className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50">Submit</button>
                   </div>
                 </>
               ) : (

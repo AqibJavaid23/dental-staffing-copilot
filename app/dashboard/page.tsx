@@ -22,6 +22,7 @@ const CARDS = [
   { href: "/dashboard/jobs", icon: "💼", title: "Job Postings", desc: "Find dental job postings (hiring practices) on LinkedIn and more.", accent: "#0ea5e9" },
   { href: "/dashboard/pools", icon: "🤝", title: "Talent Pools", desc: "Match your talent to hiring practices and manage who to pitch where.", accent: "#0d9488" },
   { href: "/dashboard/reports", icon: "📋", title: "Reports & Tasks", desc: "Submit your weekly plan, get it approved as a checklist, and track your tasks.", accent: "#8b5cf6" },
+  { href: "/dashboard/groups", icon: "👥", title: "Groups", desc: "Create and manage your teams (departments) and see who reports to whom.", accent: "#6366f1" },
 ];
 
 const ROLE_LABEL: Record<string, string> = { admin: "Admin", manager: "Manager", member: "Member" };
@@ -74,7 +75,8 @@ export default function Dashboard() {
             DENTAL STAFFING <span className="font-medium" style={{ color: "var(--brand-blue)" }}>CO-PILOT</span>
           </h1>
         </div>
-        <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4">
+          <Link href="/dashboard/groups" className="text-sm font-medium" style={{ color: "var(--brand-blue)" }}>Groups</Link>
           {profile && profile.role !== "member" && (
             <Link href="/team" className="text-sm font-medium" style={{ color: "var(--brand-blue)" }}>Team</Link>
           )}
