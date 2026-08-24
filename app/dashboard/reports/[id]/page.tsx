@@ -70,6 +70,9 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
   const [managerNote, setManagerNote] = useState("");
   const [managers, setManagers] = useState<{ id: string; full_name: string | null; email: string }[]>([]);
   const [submitTo, setSubmitTo] = useState("");
+  const [aiTasks, setAiTasks] = useState<string[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiNewTask, setAiNewTask] = useState("");
   const isOwner = profile && report && profile.id === report.owner_id;
   const isManagerOrAdmin = profile?.role === "manager" || profile?.role === "admin";
   const canReview = isManagerOrAdmin && report && !report.is_manager_task;
@@ -124,9 +127,24 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
     console.log("SUBMIT CLICKED — submitTo is:", submitTo);
     if (!planDraft.trim()) { alert("Write your plan first."); return; }
     if (!submitTo) { alert("Choose who to submit this to (a manager or admin)."); return; }
-    setSaving(true);  await supabase.from("reports").update({
-      plan_text: planDraft, status: "submitted", submitted_at: new Date().toISOString(), submitted_to: submitTo,
+           setSaving(true);
+    // Clean the English via AI before submitting
+    let cleaned = planDraft;
+    try {
+      const res = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "clean", text: planDraft }),
+      });
+      const data = await res.json();
+      if (res.ok && data.result) cleaned = data.result;
+    } catch {
+      // If AI fails, just submit the original text
+    }
+    await supabase.from("reports").update({
+      plan_text: cleaned, status: "submitted", submitted_at: new Date().toISOString(), submitted_to: submitTo,
     }).eq("id", id);
+        setPlanDraft(cleaned);
     const mgrName = managers.find((m) => m.id === submitTo);
     await logActivity("submitted", `submitted the plan to ${mgrName?.full_name || mgrName?.email || "a manager"}`);
         if (submitTo) {
@@ -141,7 +159,41 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
     setSaving(false);
     load();
   };
+  // AI: turn the plan paragraph into proposed tasks
+  const generateTasks = async () => {
+    if (!report?.plan_text?.trim()) { alert("No plan text to generate from."); return; }
+    setAiLoading(true);
+    try {
+      const res = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "tasks", text: report.plan_text }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "AI failed");
+      setAiTasks(data.tasks || []);
+    } catch (e) {
+      alert("Failed to generate tasks: " + (e instanceof Error ? e.message : "unknown"));
+    } finally { setAiLoading(false); }
+  };
 
+  // Create the reviewed AI tasks as actual checklist items
+  const createTasksFromAi = async () => {
+    if (aiTasks.length === 0) { alert("No tasks to create."); return; }
+    setSaving(true);
+    try {
+      const rows = aiTasks.map((content, i) => ({
+        report_id: id, content, priority: "mid", sort_order: items.length + i,
+      }));
+      const { error: e } = await supabase.from("report_items").insert(rows);
+      if (e) throw e;
+      await logActivity("item_added", `generated ${aiTasks.length} task(s) with AI`);
+      setAiTasks([]);
+      load();
+    } catch (e) {
+      alert("Failed to create tasks: " + (e instanceof Error ? e.message : "unknown"));
+    } finally { setSaving(false); }
+  };
   const addItem = async () => {
     if (!newItem.trim()) return;
     const label = newItem.trim();
@@ -319,6 +371,48 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
           </div>
 
           {/* Manager review */}
+                    {/* AI Task Generator (manager reviewing a submitted report) */}
+          {canReview && report.status === "submitted" && (
+            <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-6">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold text-zinc-900">AI Task Generator</h3>
+                <button onClick={generateTasks} disabled={aiLoading} className="px-3 py-1.5 text-sm font-medium bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition disabled:opacity-50">
+                  {aiLoading ? "Generating..." : "✨ Generate Tasks"}
+                </button>
+              </div>
+              <p className="text-xs text-zinc-400 mb-3">Reads the plan above and proposes tasks. Review, edit, add or remove — then create them as the checklist.</p>
+
+              {aiTasks.length > 0 && (
+                <div className="space-y-2">
+                  {aiTasks.map((t, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={t}
+                        onChange={(e) => setAiTasks((prev) => prev.map((x, xi) => (xi === i ? e.target.value : x)))}
+                        className="flex-1 px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                      />
+                      <button onClick={() => setAiTasks((prev) => prev.filter((_, xi) => xi !== i))} className="text-xs text-zinc-400 hover:text-red-500 px-2">remove</button>
+                    </div>
+                  ))}
+                  <div className="flex gap-2 pt-1">
+                    <input
+                      type="text"
+                      value={aiNewTask}
+                      onChange={(e) => setAiNewTask(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter" && aiNewTask.trim()) { setAiTasks((prev) => [...prev, aiNewTask.trim()]); setAiNewTask(""); } }}
+                      placeholder="Add another task..."
+                      className="flex-1 px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                    />
+                    <button onClick={() => { if (aiNewTask.trim()) { setAiTasks((prev) => [...prev, aiNewTask.trim()]); setAiNewTask(""); } }} className="px-3 py-2 text-sm font-medium border border-zinc-300 text-zinc-700 rounded-lg hover:bg-zinc-50 transition">Add</button>
+                  </div>
+                  <button onClick={createTasksFromAi} disabled={saving} className="mt-2 px-4 py-2 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition disabled:opacity-50">
+                    {saving ? "Creating..." : `Create ${aiTasks.length} Task(s) as Checklist`}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           {canReview && (report.status === "submitted" || report.status === "approved") && (
             <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-6">
               <h3 className="font-semibold text-zinc-900 mb-3">Manager Review</h3>

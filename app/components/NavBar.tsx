@@ -8,7 +8,7 @@ import NotificationBell from "@/app/components/NotificationBell";
 const NAV_LINKS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/dashboard/provider-database", label: "Providers" },
-  { href: "/pipelines", label: "Pipelines" },
+  { href: "/pipelines", label: "Enrichment Pipelines" },
   { href: "/dashboard/jobs", label: "Jobs" },
   { href: "/dashboard/pools", label: "Pools" },
   { href: "/dashboard/reports", label: "Reports" },
@@ -37,7 +37,7 @@ export default function NavBar() {
         {/* Logo */}
         <Link href="/dashboard" className="flex items-center gap-2 shrink-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/icon-color.png" alt="" className="w-8 h-8" />
+                    <img src="/brand/icon-color.png" alt="" className="w-10 h-10" />
           <span className="text-sm font-bold tracking-wide hidden sm:inline" style={{ color: "var(--brand-navy)" }}>
             DENTAL <span className="font-medium" style={{ color: "var(--brand-blue)" }}>CO-PILOT</span>
           </span>
