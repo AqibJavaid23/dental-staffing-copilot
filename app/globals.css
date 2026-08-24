@@ -189,3 +189,17 @@ button:not(:disabled):active {
 }
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+/* Pretty slim scrollbar for panels */
+.pretty-scroll::-webkit-scrollbar { width: 8px; }
+.pretty-scroll::-webkit-scrollbar-track { background: transparent; }
+.pretty-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(var(--brand-blue), var(--brand-navy));
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.pretty-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--brand-navy);
+  background-clip: content-box;
+}
+.pretty-scroll { scrollbar-width: thin; scrollbar-color: var(--brand-blue) transparent; }

@@ -1,11 +1,14 @@
 "use client";
-import NotificationBell from "@/app/components/NotificationBell";
+
 import { useRef, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth, signOut } from "@/app/lib/useAuth";
 import BrandLoader from "@/app/components/BrandLoader";
 import MyWeek from "@/app/components/MyWeek";
+import NotificationBell from "@/app/components/NotificationBell";
+import TaskPanel from "@/app/components/TaskPanel";
+
 function greeting() {
   const h = new Date().getHours();
   if (h < 12) return "Good morning ☀️";
@@ -75,8 +78,7 @@ export default function Dashboard() {
             DENTAL STAFFING <span className="font-medium" style={{ color: "var(--brand-blue)" }}>CO-PILOT</span>
           </h1>
         </div>
-        
-          <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4">
           {profile && <NotificationBell userId={profile.id} />}
           <Link href="/dashboard/groups" className="text-sm font-medium" style={{ color: "var(--brand-blue)" }}>Groups</Link>
           {profile && profile.role !== "member" && (
@@ -86,9 +88,10 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <main className="flex-1 px-6 py-10">
-        <div className="max-w-6xl mx-auto">
-          <div className="mb-10">
+      <main className="flex-1 px-6 py-8">
+        <div className="max-w-7xl mx-auto">
+          {/* Welcome header */}
+          <div className="mb-8">
             <div className="flex items-center gap-3 flex-wrap">
               <h2 className="text-3xl font-semibold" style={{ color: "var(--deep-navy)" }}>
                 {greeting()}, {displayName}
@@ -102,31 +105,43 @@ export default function Dashboard() {
             <p className="text-zinc-500 mt-2">Find providers, build pipelines, and run your outreach — all in one place.</p>
           </div>
 
-          <div className="relative">
-                      {profile && <MyWeek userId={profile.id} />}
-            {canLeft && (
-              <button onClick={() => slide("left")} className="absolute -left-3 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white shadow-lg border border-zinc-200 flex items-center justify-center text-zinc-600 hover:text-zinc-900 hover:shadow-xl transition" aria-label="Scroll left">‹</button>
-            )}
-
-            <div ref={scrollRef} className="overflow-x-auto pb-2 scrollbar-hide" style={{ scrollbarWidth: "none" }}>
-              <div className="grid grid-rows-2 grid-flow-col auto-cols-[minmax(260px,1fr)] gap-6">
-                {CARDS.map((c) => (
-                  <Link key={c.href} href={c.href} className="group relative overflow-hidden bg-white rounded-2xl p-6 shadow-sm border border-zinc-200 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg w-[300px] md:w-auto">
-                    <div className="absolute top-0 left-0 right-0 h-1 opacity-80" style={{ backgroundColor: c.accent }} />
-                    <div className="flex flex-col items-start space-y-3">
-                      <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl transition-transform group-hover:scale-110" style={{ backgroundColor: c.accent + "1A" }}>{c.icon}</div>
-                      <h3 className="text-lg font-semibold" style={{ color: "var(--brand-navy)" }}>{c.title}</h3>
-                      <p className="text-sm text-zinc-500 leading-relaxed">{c.desc}</p>
-                      <span className="text-sm font-medium inline-flex items-center gap-1 group-hover:gap-2 transition-all" style={{ color: c.accent }}>Open <span aria-hidden>→</span></span>
-                    </div>
-                  </Link>
-                ))}
-              </div>
+          {/* Two-column workspace: tasks left, cards right */}
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(320px,380px)_1fr] gap-6">
+            {/* LEFT — task panel */}
+            <div>
+              {profile && <TaskPanel profile={profile} />}
             </div>
 
-            {canRight && (
-              <button onClick={() => slide("right")} className="absolute -right-3 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white shadow-lg border border-zinc-200 flex items-center justify-center text-zinc-600 hover:text-zinc-900 hover:shadow-xl transition" aria-label="Scroll right">›</button>
-            )}
+            {/* RIGHT — My Week stats + card slider */}
+            <div className="min-w-0">
+              {profile && <MyWeek userId={profile.id} />}
+
+              <div className="relative">
+                {canLeft && (
+                  <button onClick={() => slide("left")} className="absolute -left-3 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white shadow-lg border border-zinc-200 flex items-center justify-center text-zinc-600 hover:text-zinc-900 hover:shadow-xl transition" aria-label="Scroll left">‹</button>
+                )}
+
+                <div ref={scrollRef} className="overflow-x-auto pb-2 scrollbar-hide" style={{ scrollbarWidth: "none" }}>
+                  <div className="grid grid-rows-2 grid-flow-col auto-cols-[minmax(240px,1fr)] gap-4">
+                    {CARDS.map((c) => (
+                      <Link key={c.href} href={c.href} className="group relative overflow-hidden bg-white rounded-2xl p-5 shadow-sm border border-zinc-200 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg w-[260px]">
+                        <div className="absolute top-0 left-0 right-0 h-1 opacity-80" style={{ backgroundColor: c.accent }} />
+                        <div className="flex flex-col items-start space-y-2">
+                          <div className="w-11 h-11 rounded-xl flex items-center justify-center text-xl transition-transform group-hover:scale-110" style={{ backgroundColor: c.accent + "1A" }}>{c.icon}</div>
+                          <h3 className="text-base font-semibold" style={{ color: "var(--brand-navy)" }}>{c.title}</h3>
+                          <p className="text-xs text-zinc-500 leading-relaxed">{c.desc}</p>
+                          <span className="text-xs font-medium inline-flex items-center gap-1 group-hover:gap-2 transition-all" style={{ color: c.accent }}>Open <span aria-hidden>→</span></span>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+
+                {canRight && (
+                  <button onClick={() => slide("right")} className="absolute -right-3 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white shadow-lg border border-zinc-200 flex items-center justify-center text-zinc-600 hover:text-zinc-900 hover:shadow-xl transition" aria-label="Scroll right">›</button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </main>
