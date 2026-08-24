@@ -70,24 +70,6 @@ export default function Dashboard() {
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50">
-      <header className="flex justify-between items-center px-6 py-4 border-b border-zinc-200 bg-white">
-        <div className="flex items-center gap-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/icon-color.png" alt="" className="w-10 h-10" />
-          <h1 className="text-lg font-bold tracking-wide" style={{ color: "var(--brand-navy)" }}>
-            DENTAL STAFFING <span className="font-medium" style={{ color: "var(--brand-blue)" }}>CO-PILOT</span>
-          </h1>
-        </div>
-        <div className="flex items-center gap-4">
-          {profile && <NotificationBell userId={profile.id} />}
-          <Link href="/dashboard/groups" className="text-sm font-medium" style={{ color: "var(--brand-blue)" }}>Groups</Link>
-          {profile && profile.role !== "member" && (
-            <Link href="/team" className="text-sm font-medium" style={{ color: "var(--brand-blue)" }}>Team</Link>
-          )}
-          <button onClick={handleLogout} className="text-sm text-zinc-500 hover:text-zinc-900 transition">Sign out</button>
-        </div>
-      </header>
-
       <main className="flex-1 px-6 py-8">
         <div className="max-w-7xl mx-auto">
           {/* Welcome header */}
