@@ -73,7 +73,7 @@ export default function Dashboard() {
       <main className="flex-1 px-6 py-8">
         <div className="max-w-7xl mx-auto">
           {/* Welcome header */}
-          <div className="mb-8">
+          <div className="mb-8 animate-slide-in-left">
             <div className="flex items-center gap-3 flex-wrap">
               <h2 className="text-3xl font-semibold" style={{ color: "var(--deep-navy)" }}>
                 {greeting()}, {displayName}

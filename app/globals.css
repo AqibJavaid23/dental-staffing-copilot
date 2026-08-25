@@ -202,3 +202,11 @@ button:not(:disabled):active {
   background-clip: content-box;
 }
 .pretty-scroll { scrollbar-width: thin; scrollbar-color: var(--brand-blue) transparent; }
+/* Greeting slide-in from left */
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-30px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.animate-slide-in-left {
+  animation: slideInLeft 0.6s ease-out both;
+}
