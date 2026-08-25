@@ -132,7 +132,6 @@ a {
   animation: splash-fade-in 0.8s ease 0.3s both;
 }
 html, body {
-  overflow-x: hidden;
   max-width: 100%;
 }
 
