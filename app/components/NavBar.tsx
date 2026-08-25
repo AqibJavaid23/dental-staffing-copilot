@@ -14,7 +14,6 @@ const NAV_LINKS = [
   { href: "/dashboard/pools", label: "Pools" },
   { href: "/dashboard/reports", label: "Reports" },
   { href: "/dashboard/groups", label: "Groups" },
-  { href: "/dashboard/lookups", label: "Provider Lookups" },
 ];
 
 const HIDDEN_ON = ["/", "/set-password"];
