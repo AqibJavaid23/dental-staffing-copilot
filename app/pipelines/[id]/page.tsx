@@ -498,9 +498,14 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
                           <td className="px-4 py-3 whitespace-nowrap text-right">
                             <div className="flex gap-2 justify-end">
                            {isHiring && (
-                                <button onClick={() => openContacts(r)} className="px-3 py-1 text-xs font-medium bg-cyan-600 text-white rounded-md hover:bg-cyan-700 transition" title="Find email contacts at this company">
-                                  Find Contacts
-                                </button>
+                                <>
+                                  <button onClick={() => sendToPool(r)} className="px-3 py-1 text-xs font-medium bg-teal-600 text-white rounded-md hover:bg-teal-700 transition" title="Create a talent pool for this company">
+                                    + Pool
+                                  </button>
+                                  <button onClick={() => openContacts(r)} className="px-3 py-1 text-xs font-medium bg-cyan-600 text-white rounded-md hover:bg-cyan-700 transition" title="Find email contacts at this company">
+                                    Find Contacts
+                                  </button>
+                                </>
                               )}  <button onClick={() => openLogOnly(r)} disabled={isBusy} className="px-3 py-1 text-xs font-medium border border-zinc-300 text-zinc-700 rounded-md hover:bg-zinc-50 transition disabled:opacity-40" title="Add a note to the outreach history">
                                 + Log
                               </button>

@@ -6,7 +6,7 @@ import { supabase } from "@/app/lib/supabase";
 import { useAuth } from "@/app/lib/useAuth";
 import BrandLoader from "@/app/components/BrandLoader";
 import AdminProgress from "@/app/components/AdminProgress";
-
+import DepartmentTree from "@/app/components/DepartmentTree";
 type Profile = { id: string; full_name: string | null; email: string; role: string };
 type GroupMember = { id: string; user_id: string; role_in_group: string };
 type Group = { id: string; name: string; created_by: string | null; created_at: string; members: GroupMember[] };
@@ -154,6 +154,20 @@ export default function GroupsPage() {
                               <button onClick={() => removeMember(m.id)} className="text-xs text-zinc-400 hover:text-red-500">remove</button>
                             </div>
                           ))}
+                                                    <div className="border-t border-zinc-100 pt-2 mt-2">
+                                                     <div className="border-t border-zinc-100 pt-2 mt-2">
+                            <DepartmentTree
+                              groupId={g.id}
+                              adminIds={g.members.filter((m) => m.role_in_group === "admin").map((m) => m.user_id)}
+                              managerIds={g.members.filter((m) => m.role_in_group === "manager").map((m) => m.user_id)}
+                              memberIds={members.map((m) => m.user_id)}
+                              nameOf={nameOf}
+                              people={people}
+                              existingIds={g.members.map((m) => m.user_id)}
+                              onChanged={load}
+                            />
+                          </div>
+                          </div>
                           <select onChange={(e) => { addMember(g.id, e.target.value); e.target.value = ""; }} defaultValue="" className="text-xs border border-zinc-300 rounded-lg px-2 py-1.5 bg-white mt-1">
                             <option value="" disabled>+ Add member...</option>
                             {availableMembers.filter((p) => !g.members.some((m) => m.user_id === p.id)).map((p) => (
