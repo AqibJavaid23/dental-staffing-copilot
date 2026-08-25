@@ -9,11 +9,12 @@ import NotificationBell from "@/app/components/NotificationBell";
 const NAV_LINKS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/dashboard/provider-database", label: "Providers" },
-  { href: "/pipelines", label: "Pipelines" },
+  { href: "/pipelines", label: " Enrichment Pipelines" },
   { href: "/dashboard/jobs", label: "Jobs" },
   { href: "/dashboard/pools", label: "Pools" },
   { href: "/dashboard/reports", label: "Reports" },
   { href: "/dashboard/groups", label: "Groups" },
+  { href: "/dashboard/lookups", label: "Provider Lookups" },
 ];
 
 const HIDDEN_ON = ["/", "/set-password"];
