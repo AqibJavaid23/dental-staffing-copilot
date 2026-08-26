@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Montserrat } from "next/font/google";
 import "./globals.css";
 import NavBar from "@/app/components/NavBar";
-
+import AiAssistant from "@/app/components/AiAssistant";
 const montserrat = Montserrat({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
@@ -20,9 +20,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full antialiased">
-      <body className={`${montserrat.className} min-h-full flex flex-col`}>
+           <body className={`${montserrat.className} min-h-full flex flex-col`}>
         <NavBar />
         {children}
+        <AiAssistant />
       </body>
     </html>
   );
