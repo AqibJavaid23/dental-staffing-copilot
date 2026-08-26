@@ -136,13 +136,7 @@ html, body {
 }
 
 /* Make wide tables scroll inside their container on small screens */
-@media (max-width: 768px) {
-  table {
-    display: block;
-    overflow-x: auto;
-    white-space: nowrap;
-  }
-}
+
 /* ---------- Global polish: gentle fade-ins & smooth transitions ---------- */
 
 /* Content gently fades + rises in when a page/section mounts */

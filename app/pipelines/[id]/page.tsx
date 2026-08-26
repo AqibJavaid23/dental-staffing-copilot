@@ -426,8 +426,8 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
           : loading ? <BrandLoader label="Loading pipeline..." />
           : rows.length === 0 ? <div className="p-12 text-center text-zinc-400">This pipeline is empty.</div>
           : (
-            <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 overflow-hidden">
-              <table className="w-full text-sm">
+            <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 overflow-x-auto pretty-scroll">
+              <table className="w-full text-sm min-w-[900px]">
                 <thead className="bg-zinc-50 border-b border-zinc-200">
                   <tr>
                     <th className="text-left px-4 py-3 font-medium text-zinc-700 w-10"></th>
