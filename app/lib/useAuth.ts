@@ -19,16 +19,11 @@ export function useAuth() {
   useEffect(() => {
     let active = true;
 
-    const check = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        if (active) router.push("/");
-        return;
-      }
+    const loadProfile = async (userId: string) => {
       const { data: prof } = await supabase
         .from("profiles")
         .select("*")
-        .eq("id", session.user.id)
+        .eq("id", userId)
         .single();
       if (active) {
         setProfile(prof as Profile);
@@ -36,8 +31,37 @@ export function useAuth() {
       }
     };
 
+    // Initial check on mount
+    const check = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        if (active) {
+          setProfile(null);
+          setChecking(false);   // <-- always resolve, even when logged out
+          router.push("/");
+        }
+        return;
+      }
+      await loadProfile(session.user.id);
+    };
+
     check();
-    return () => { active = false; };
+
+    // Listen for auth changes (login/logout) so components update WITHOUT a refresh
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!active) return;
+      if (session?.user) {
+        loadProfile(session.user.id);
+      } else {
+        setProfile(null);
+        setChecking(false);
+      }
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, [router]);
 
   return { profile, checking };
