@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/app/lib/useAuth";
+import ReactMarkdown from "react-markdown";
 
 type Msg = { role: "user" | "assistant"; text: string };
 
@@ -74,16 +75,26 @@ export default function AiAssistant() {
             {messages.map((m, i) => (
               <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                 <div
-                  className={`max-w-[85%] px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap ${m.role === "user" ? "bg-blue-600 text-white rounded-br-sm" : "bg-white border border-zinc-200 text-zinc-800 rounded-bl-sm"}`}
+                  className={`max-w-[85%] px-3 py-2 rounded-2xl text-sm ${m.role === "user" ? "text-white rounded-br-sm whitespace-pre-wrap" : "bg-white border border-zinc-200 text-zinc-800 rounded-bl-sm"}`}
                   style={m.role === "user" ? { backgroundColor: "var(--brand-blue)" } : {}}
                 >
-                  {m.text}
+                  {m.role === "user" ? (
+                    m.text
+                  ) : (
+                    <div className="assistant-md">
+                      <ReactMarkdown>{m.text}</ReactMarkdown>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
             {loading && (
               <div className="flex justify-start">
-                <div className="bg-white border border-zinc-200 text-zinc-400 px-3 py-2 rounded-2xl rounded-bl-sm text-sm">Thinking…</div>
+                <div className="bg-white border border-zinc-200 text-zinc-400 px-3 py-2 rounded-2xl rounded-bl-sm text-sm flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: "0ms" }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: "150ms" }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: "300ms" }} />
+                </div>
               </div>
             )}
             <div ref={endRef} />
