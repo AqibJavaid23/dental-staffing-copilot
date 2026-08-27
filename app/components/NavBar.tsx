@@ -118,8 +118,8 @@ export default function NavBar() {
                 </Link>
               );
             })}
-               <Link href="/dashboard/prospecting/sms" onClick={() => setMenuOpen(false)} className="px-3 py-2.5 rounded-lg text-sm font-medium" style={{ color: "#3f3f46" }}>💬 SMS Campaign</Link>
-              <Link href="/dashboard/prospecting/email" onClick={() => setMenuOpen(false)} className="px-3 py-2.5 rounded-lg text-sm font-medium" style={{ color: "#3f3f46" }}>✉️ Email Campaign</Link>              <Link href="/dashboard/prospecting/sms" onClick={() => setMenuOpen(false)} className="px-3 py-2.5 rounded-lg text-sm font-medium" style={{ color: "#3f3f46" }}>💬 SMS Campaign</Link>
+               
+              <Link href="/dashboard/prospecting/sms" onClick={() => setMenuOpen(false)} className="px-3 py-2.5 rounded-lg text-sm font-medium" style={{ color: "#3f3f46" }}>💬 SMS Campaign</Link>
               <Link href="/dashboard/prospecting/email" onClick={() => setMenuOpen(false)} className="px-3 py-2.5 rounded-lg text-sm font-medium" style={{ color: "#3f3f46" }}>✉️ Email Campaign</Link>
             <div className="border-t border-zinc-100 mt-2 pt-2 flex flex-col gap-1">
               {profile.role !== "member" && (
