@@ -138,9 +138,7 @@ export default function ReportsPage() {
           <div className="flex gap-2 flex-wrap">
             <button onClick={() => createReport("weekly", false)} disabled={creating} className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50">+ Weekly Report</button>
             <button onClick={() => createReport("ongoing", false)} disabled={creating} className="px-4 py-2 text-sm font-medium border border-zinc-300 text-zinc-700 rounded-lg hover:bg-zinc-50 transition disabled:opacity-50">+ Task Plan</button>
-            {isManagerOrAdmin && (
-              <button onClick={() => createReport("ongoing", true)} disabled={creating} className="px-4 py-2 text-sm font-medium bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition disabled:opacity-50">+ My Own Task</button>
-            )}
+            <button onClick={() => createReport("ongoing", true)} disabled={creating} className="px-4 py-2 text-sm font-medium bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition disabled:opacity-50">+ My Own Task</button>
           </div>
 
           {/* KANBAN VIEW */}

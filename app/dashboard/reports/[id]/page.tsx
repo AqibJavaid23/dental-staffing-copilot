@@ -410,7 +410,7 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
                     {saving ? "Creating..." : `Create ${aiTasks.length} Task(s) as Checklist`}
                   </button>
                 </div>
-              )}
+              )}const isOwnManagerTask = report?.is_manager_task && isOwner;
             </div>
           )}
           {canReview && (report.status === "submitted" || report.status === "approved") && (
