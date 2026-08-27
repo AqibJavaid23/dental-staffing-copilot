@@ -23,6 +23,7 @@ export default function NavBar() {
   const router = useRouter();
   const { profile, checking } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [prospectOpen, setProspectOpen] = useState(false);
 
   if (HIDDEN_ON.includes(pathname) || checking || !profile) return null;
 
@@ -60,6 +61,21 @@ export default function NavBar() {
               </Link>
             );
           })}
+                    {/* Prospecting dropdown */}
+          <div className="relative" onMouseEnter={() => setProspectOpen(true)} onMouseLeave={() => setProspectOpen(false)}>
+            <button
+              className="px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition hover:bg-zinc-100"
+              style={pathname.startsWith("/dashboard/prospecting") ? { backgroundColor: "var(--brand-navy)", color: "white" } : { color: "#52525b" }}
+            >
+              Prospecting ▾
+            </button>
+            {prospectOpen && (
+              <div className="absolute top-full left-0 mt-0 w-44 bg-white rounded-lg shadow-lg border border-zinc-200 py-1 z-50">
+                <Link href="/dashboard/prospecting/sms" className="block px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 transition">💬 SMS Campaign</Link>
+                <Link href="/dashboard/prospecting/email" className="block px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 transition">✉️ Email Campaign</Link>
+              </div>
+            )}
+          </div>
         </nav>
 
         {/* Right side */}
@@ -102,6 +118,9 @@ export default function NavBar() {
                 </Link>
               );
             })}
+               <Link href="/dashboard/prospecting/sms" onClick={() => setMenuOpen(false)} className="px-3 py-2.5 rounded-lg text-sm font-medium" style={{ color: "#3f3f46" }}>💬 SMS Campaign</Link>
+              <Link href="/dashboard/prospecting/email" onClick={() => setMenuOpen(false)} className="px-3 py-2.5 rounded-lg text-sm font-medium" style={{ color: "#3f3f46" }}>✉️ Email Campaign</Link>              <Link href="/dashboard/prospecting/sms" onClick={() => setMenuOpen(false)} className="px-3 py-2.5 rounded-lg text-sm font-medium" style={{ color: "#3f3f46" }}>💬 SMS Campaign</Link>
+              <Link href="/dashboard/prospecting/email" onClick={() => setMenuOpen(false)} className="px-3 py-2.5 rounded-lg text-sm font-medium" style={{ color: "#3f3f46" }}>✉️ Email Campaign</Link>
             <div className="border-t border-zinc-100 mt-2 pt-2 flex flex-col gap-1">
               {profile.role !== "member" && (
                 <Link href="/team" onClick={() => setMenuOpen(false)} className="px-3 py-2.5 rounded-lg text-sm font-medium" style={{ color: "var(--brand-blue)" }}>Team</Link>
