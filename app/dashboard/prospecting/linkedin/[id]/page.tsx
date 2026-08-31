@@ -13,13 +13,15 @@ import BrandLoader from "@/app/components/BrandLoader";
 
 // The LinkedIn action types available in the palette
 const ACTIONS = [
-  { type: "view", label: "View Profile", icon: "👁️", color: "#0080D0" },
-  { type: "connect", label: "Connect", icon: "🤝", color: "#123B78" },
-  { type: "message", label: "Message", icon: "💬", color: "#059669" },
-  { type: "follow", label: "Follow", icon: "➕", color: "#7c3aed" },
-  { type: "like", label: "Like Post", icon: "👍", color: "#d97706" },
-  { type: "wait", label: "Wait", icon: "⏳", color: "#71717a" },
-  { type: "branch", label: "If Accepted / Replied", icon: "🔀", color: "#e11d48" },
+  { type: "start", label: "Start", icon: "🟢", color: "#16a34a", special: true },
+  { type: "view", label: "View Profile", icon: "👁️", color: "#0080D0", special: false },
+  { type: "connect", label: "Connect", icon: "🤝", color: "#123B78", special: false },
+  { type: "message", label: "Message", icon: "💬", color: "#059669", special: false },
+  { type: "follow", label: "Follow", icon: "➕", color: "#7c3aed", special: false },
+  { type: "like", label: "Like Post", icon: "👍", color: "#d97706", special: false },
+  { type: "wait", label: "Wait", icon: "⏳", color: "#71717a", special: false },
+  { type: "branch", label: "If Accepted / Replied", icon: "🔀", color: "#e11d48", special: false },
+  { type: "end", label: "End", icon: "🔴", color: "#dc2626", special: true },
 ];
 const actionMeta = (t: string) => ACTIONS.find((a) => a.type === t) || ACTIONS[0];
 
@@ -38,8 +40,28 @@ export default function LinkedInCanvasPage({ params }: { params: Promise<{ id: s
       const { data } = await supabase.from("linkedin_flows").select("*").eq("id", id).single();
       if (data) {
         setName(data.name);
-        setNodes((data.nodes as Node[]) || []);
-        setEdges((data.edges as Edge[]) || []);
+        const loadedNodes = (data.nodes as Node[]) || [];
+        const loadedEdges = (data.edges as Edge[]) || [];
+
+        // Auto-place a Start node if none exists (new flow)
+        const hasStart = loadedNodes.some((n) => (n.data.actionType as string) === "start");
+        if (!hasStart) {
+          const startMeta = actionMeta("start");
+          loadedNodes.unshift({
+            id: `start-${Date.now()}`,
+            type: "default",
+            position: { x: 300, y: 40 },
+            data: { label: `${startMeta.icon} ${startMeta.label}`, actionType: "start", config: {} },
+            style: {
+              borderRadius: 24, border: `2px solid ${startMeta.color}`, padding: "8px 18px",
+              fontSize: 13, fontWeight: 700, background: "#f0fdf4", color: "#166534", width: 140,
+              textAlign: "center" as const,
+            },
+          });
+        }
+
+        setNodes(loadedNodes);
+        setEdges(loadedEdges);
       }
       setLoading(false);
     })();
@@ -50,15 +72,31 @@ export default function LinkedInCanvasPage({ params }: { params: Promise<{ id: s
   const onConnect = useCallback((conn: Connection) => setEdges((eds) => addEdge({ ...conn, animated: true }, eds)), []);
 
   const addNode = (type: string) => {
+    // Enforce only one Start and one End
+    if (type === "start" && nodes.some((n) => (n.data.actionType as string) === "start")) return;
+    if (type === "end" && nodes.some((n) => (n.data.actionType as string) === "end")) return;
+
     const meta = actionMeta(type);
+    const isSpecial = type === "start" || type === "end";
+
     const newNode: Node = {
       id: `${type}-${Date.now()}`,
       type: "default",
-      position: { x: 250 + Math.random() * 100, y: 100 + nodes.length * 90 },
+      position: {
+        x: isSpecial ? 300 : 250 + Math.random() * 100,
+        y: type === "start" ? 40 : type === "end" ? 100 + nodes.length * 90 + 40 : 100 + nodes.length * 90,
+      },
       data: { label: `${meta.icon} ${meta.label}`, actionType: type, config: {} },
       style: {
-        borderRadius: 10, border: `2px solid ${meta.color}`, padding: "8px 14px",
-        fontSize: 13, fontWeight: 600, background: "white", color: "#18181b", width: 180,
+        borderRadius: isSpecial ? 24 : 10,
+        border: `2px solid ${meta.color}`,
+        padding: isSpecial ? "8px 18px" : "8px 14px",
+        fontSize: 13,
+        fontWeight: isSpecial ? 700 : 600,
+        background: type === "start" ? "#f0fdf4" : type === "end" ? "#fef2f2" : "white",
+        color: type === "start" ? "#166534" : type === "end" ? "#991b1b" : "#18181b",
+        width: isSpecial ? 140 : 180,
+        textAlign: "center" as const,
       },
     };
     setNodes((nds) => [...nds, newNode]);
@@ -80,6 +118,8 @@ export default function LinkedInCanvasPage({ params }: { params: Promise<{ id: s
 
   const deleteSelected = () => {
     if (!selected) return;
+    // Prevent deleting the Start node
+    if ((selected.data.actionType as string) === "start") return;
     setNodes((nds) => nds.filter((n) => n.id !== selected.id));
     setEdges((eds) => eds.filter((e) => e.source !== selected.id && e.target !== selected.id));
     setSelected(null);
@@ -106,11 +146,14 @@ export default function LinkedInCanvasPage({ params }: { params: Promise<{ id: s
         <div className="w-48 border-r border-zinc-200 bg-white p-3 overflow-y-auto">
           <h4 className="text-xs font-semibold text-zinc-500 uppercase mb-2">Actions</h4>
           <div className="space-y-2">
-            {ACTIONS.map((a) => (
-              <button key={a.type} onClick={() => addNode(a.type)} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-200 text-sm text-zinc-700 hover:bg-zinc-50 transition text-left" style={{ borderLeftColor: a.color, borderLeftWidth: 3 }}>
-                <span>{a.icon}</span><span>{a.label}</span>
-              </button>
-            ))}
+            {ACTIONS.map((a) => {
+              const alreadyExists = (a.type === "start" || a.type === "end") && nodes.some((n) => (n.data.actionType as string) === a.type);
+              return (
+                <button key={a.type} onClick={() => addNode(a.type)} disabled={alreadyExists} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-200 text-sm transition text-left ${alreadyExists ? "opacity-40 cursor-not-allowed text-zinc-400" : "text-zinc-700 hover:bg-zinc-50"}`} style={{ borderLeftColor: a.color, borderLeftWidth: 3 }}>
+                  <span>{a.icon}</span><span>{a.label}</span>{alreadyExists && <span className="ml-auto text-[10px] text-zinc-400">added</span>}
+                </button>
+              );
+            })}
           </div>
           <p className="text-[11px] text-zinc-400 mt-3">Click to add. Drag nodes on the canvas; drag from a node&apos;s edge to connect.</p>
         </div>
@@ -158,11 +201,19 @@ export default function LinkedInCanvasPage({ params }: { params: Promise<{ id: s
                 <input type="number" min={0} value={selectedConfig.days || ""} onChange={(e) => updateNodeConfig("days", e.target.value)} className="w-24 px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
             )}
+            {selectedType === "start" && (
+              <p className="text-sm text-zinc-500">This is where your workflow begins. Connect it to the first action. Cannot be deleted.</p>
+            )}
+            {selectedType === "end" && (
+              <p className="text-sm text-zinc-500">This marks the end of the workflow. Connect the last action here.</p>
+            )}
             {(selectedType === "view" || selectedType === "follow" || selectedType === "like" || selectedType === "branch") && (
               <p className="text-sm text-zinc-500">No settings needed for this action.</p>
             )}
 
-            <button onClick={deleteSelected} className="mt-4 text-sm text-red-500 hover:underline">Delete this step</button>
+            {(selected.data.actionType as string) !== "start" && (
+              <button onClick={deleteSelected} className="mt-4 text-sm text-red-500 hover:underline">Delete this step</button>
+            )}
           </div>
         )}
       </div>
