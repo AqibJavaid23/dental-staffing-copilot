@@ -73,6 +73,7 @@ export default function NavBar() {
               <div className="absolute top-full left-0 mt-0 w-44 bg-white rounded-lg shadow-lg border border-zinc-200 py-1 z-50">
                 <Link href="/dashboard/prospecting/sms" className="block px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 transition">💬 SMS Campaign</Link>
                 <Link href="/dashboard/prospecting/email" className="block px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 transition">✉️ Email Campaign</Link>
+                <Link href="/dashboard/prospecting/linkedin" className="block px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 transition">🔗 LinkedIn Flows</Link>
               </div>
             )}
           </div>
@@ -121,6 +122,7 @@ export default function NavBar() {
                
               <Link href="/dashboard/prospecting/sms" onClick={() => setMenuOpen(false)} className="px-3 py-2.5 rounded-lg text-sm font-medium" style={{ color: "#3f3f46" }}>💬 SMS Campaign</Link>
               <Link href="/dashboard/prospecting/email" onClick={() => setMenuOpen(false)} className="px-3 py-2.5 rounded-lg text-sm font-medium" style={{ color: "#3f3f46" }}>✉️ Email Campaign</Link>
+                          <Link href="/dashboard/prospecting/linkedin" onClick={() => setMenuOpen(false)} className="px-3 py-2.5 rounded-lg text-sm font-medium" style={{ color: "#3f3f46" }}>🔗 LinkedIn Flows</Link>
             <div className="border-t border-zinc-100 mt-2 pt-2 flex flex-col gap-1">
               {profile.role !== "member" && (
                 <Link href="/team" onClick={() => setMenuOpen(false)} className="px-3 py-2.5 rounded-lg text-sm font-medium" style={{ color: "var(--brand-blue)" }}>Team</Link>

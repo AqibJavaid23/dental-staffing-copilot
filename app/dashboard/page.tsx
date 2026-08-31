@@ -159,6 +159,13 @@ export default function Dashboard() {
                   <div className="text-xs text-zinc-500">Email your prospects from your domain</div>
                 </div>
               </Link>
+                            <Link href="/dashboard/prospecting/linkedin" className="flex items-center gap-3 p-4 rounded-xl border border-zinc-200 hover:border-blue-400 hover:bg-blue-50/40 transition">
+                <span className="text-2xl">🔗</span>
+                <div>
+                  <div className="font-semibold text-zinc-900">LinkedIn Flows</div>
+                  <div className="text-xs text-zinc-500">Design LinkedIn outreach on a canvas</div>
+                </div>
+              </Link>
             </div>
           </div>
         </div>
