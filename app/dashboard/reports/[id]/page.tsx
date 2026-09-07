@@ -8,6 +8,7 @@ import { useAuth } from "@/app/lib/useAuth";
 import BrandLoader from "@/app/components/BrandLoader";
 import ItemComments from "@/app/components/ItemComments";
 import { notify } from "@/app/lib/notify";
+
 type Report = {
   id: string;
   owner_id: string;
@@ -38,6 +39,9 @@ type Activity = {
   detail: string | null;
   created_at: string;
 };
+
+// An AI-proposed task carries its own priority + deadline while being reviewed
+type AiTask = { content: string; priority: string; deadline: string };
 
 const PRIORITY = {
   low: { label: "Low", classes: "bg-emerald-100 text-emerald-700", dot: "#059669" },
@@ -70,13 +74,17 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
   const [managerNote, setManagerNote] = useState("");
   const [managers, setManagers] = useState<{ id: string; full_name: string | null; email: string }[]>([]);
   const [submitTo, setSubmitTo] = useState("");
-  const [aiTasks, setAiTasks] = useState<string[]>([]);
+
+  // Build mode: "manual" or "ai"
+  const [buildMode, setBuildMode] = useState<"manual" | "ai">("manual");
+  const [aiTasks, setAiTasks] = useState<AiTask[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiNewTask, setAiNewTask] = useState("");
+
   const isOwner = profile && report && profile.id === report.owner_id;
   const isManagerOrAdmin = profile?.role === "manager" || profile?.role === "admin";
   const canReview = isManagerOrAdmin && report && !report.is_manager_task;
-  const isOwnManagerTask = isManagerOrAdmin && report?.is_manager_task && isOwner;
+  const isOwnManagerTask = report?.is_manager_task && isOwner;
 
   const logActivity = async (action: string, detail: string) => {
     if (!profile) return;
@@ -104,11 +112,13 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
       const { data: prof } = await supabase.from("profiles").select("full_name, email").eq("id", r.owner_id).maybeSingle();
       setOwnerName(prof?.full_name || prof?.email || "Unknown");
 
-
-            // Load all managers + admins for the submit-to dropdown
+      // Load all managers + admins for the submit-to dropdown
       const { data: mgrs } = await supabase.from("profiles").select("id, full_name, email").in("role", ["manager", "admin"]);
       setManagers((mgrs ?? []) as { id: string; full_name: string | null; email: string }[]);
       if (r.submitted_to) setSubmitTo(r.submitted_to);
+
+      const { data: acts } = await supabase.from("report_activity").select("*").eq("report_id", id).order("created_at", { ascending: false });
+      setActivity((acts ?? []) as Activity[]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load report");
     } finally { setLoading(false); }
@@ -123,11 +133,10 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
     load();
   };
 
-    const submitReport = async () => {
-    console.log("SUBMIT CLICKED — submitTo is:", submitTo);
+  const submitReport = async () => {
     if (!planDraft.trim()) { alert("Write your plan first."); return; }
     if (!submitTo) { alert("Choose who to submit this to (a manager or admin)."); return; }
-           setSaving(true);
+    setSaving(true);
     // Clean the English via AI before submitting
     let cleaned = planDraft;
     try {
@@ -144,10 +153,10 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
     await supabase.from("reports").update({
       plan_text: cleaned, status: "submitted", submitted_at: new Date().toISOString(), submitted_to: submitTo,
     }).eq("id", id);
-        setPlanDraft(cleaned);
+    setPlanDraft(cleaned);
     const mgrName = managers.find((m) => m.id === submitTo);
     await logActivity("submitted", `submitted the plan to ${mgrName?.full_name || mgrName?.email || "a manager"}`);
-        if (submitTo) {
+    if (submitTo) {
       await notify(
         submitTo,
         `${profile?.full_name || profile?.email || "A member"} submitted a plan for your review: "${report?.title || "Report"}"`,
@@ -159,7 +168,8 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
     setSaving(false);
     load();
   };
-  // AI: turn the plan paragraph into proposed tasks
+
+  // AI: turn the plan paragraph into proposed tasks (each gets default priority + empty deadline)
   const generateTasks = async () => {
     if (!report?.plan_text?.trim()) { alert("No plan text to generate from."); return; }
     setAiLoading(true);
@@ -171,19 +181,29 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "AI failed");
-      setAiTasks(data.tasks || []);
+      const tasks: AiTask[] = (data.tasks || []).map((t: string) => ({ content: t, priority: "mid", deadline: "" }));
+      setAiTasks(tasks);
     } catch (e) {
       alert("Failed to generate tasks: " + (e instanceof Error ? e.message : "unknown"));
     } finally { setAiLoading(false); }
   };
 
-  // Create the reviewed AI tasks as actual checklist items
+  const updateAiTask = (i: number, patch: Partial<AiTask>) => {
+    setAiTasks((prev) => prev.map((t, xi) => (xi === i ? { ...t, ...patch } : t)));
+  };
+
+  // Create the reviewed AI tasks as actual checklist items (with their priority + deadline)
   const createTasksFromAi = async () => {
     if (aiTasks.length === 0) { alert("No tasks to create."); return; }
+    if (aiTasks.some((t) => !t.content.trim())) { alert("Every task needs text."); return; }
     setSaving(true);
     try {
-      const rows = aiTasks.map((content, i) => ({
-        report_id: id, content, priority: "mid", sort_order: items.length + i,
+      const rows = aiTasks.map((t, i) => ({
+        report_id: id,
+        content: t.content.trim(),
+        priority: t.priority || "mid",
+        deadline: t.deadline || null,
+        sort_order: items.length + i,
       }));
       const { error: e } = await supabase.from("report_items").insert(rows);
       if (e) throw e;
@@ -194,6 +214,7 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
       alert("Failed to create tasks: " + (e instanceof Error ? e.message : "unknown"));
     } finally { setSaving(false); }
   };
+
   const addItem = async () => {
     if (!newItem.trim()) return;
     const label = newItem.trim();
@@ -226,7 +247,7 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
       approved_at: new Date().toISOString(), approved_by: profile?.id,
     }).eq("id", id);
     await logActivity("approved", "approved the checklist");
-        if (report?.owner_id && report.owner_id !== profile?.id) {
+    if (report?.owner_id && report.owner_id !== profile?.id) {
       await notify(
         report.owner_id,
         `Your plan "${report.title}" was approved by ${profile?.full_name || profile?.email || "your manager"}. Your checklist is ready.`,
@@ -250,7 +271,7 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
     if (updated.length > 0 && updated.every((it) => it.done)) {
       await supabase.from("reports").update({ status: "completed" }).eq("id", id);
       await logActivity("completed", "completed the whole report");
-            if (report?.submitted_to && report.submitted_to !== profile?.id) {
+      if (report?.submitted_to && report.submitted_to !== profile?.id) {
         await notify(
           report.submitted_to,
           `${profile?.full_name || profile?.email || "A member"} completed all tasks in "${report.title}".`,
@@ -274,6 +295,8 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
 
   const canEditItems = (canReview && (report.status === "submitted" || report.status === "approved")) || isOwnManagerTask;
   const memberCanEditPlan = isOwner && !report.is_manager_task && (report.status === "draft");
+  // Show the build tools (manual/AI) when the reviewer/owner can edit items and there is a plan to work from
+  const showBuildTools = canEditItems;
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50">
@@ -322,12 +345,102 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
             </div>
           )}
 
+          {/* Build the checklist — Manual vs AI (only for reviewer/owner who can edit) */}
+          {showBuildTools && (
+            <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-6">
+              <h3 className="font-semibold text-zinc-900 mb-3">Build the Checklist</h3>
+
+              {/* Two-button choice */}
+              <div className="flex gap-2 mb-4">
+                <button
+                  onClick={() => setBuildMode("manual")}
+                  className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg border transition ${buildMode === "manual" ? "bg-zinc-800 text-white border-zinc-800" : "bg-white text-zinc-700 border-zinc-300 hover:bg-zinc-50"}`}
+                >
+                  ✍️ Build Manually
+                </button>
+                <button
+                  onClick={() => setBuildMode("ai")}
+                  className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg border transition ${buildMode === "ai" ? "bg-violet-600 text-white border-violet-600" : "bg-white text-zinc-700 border-zinc-300 hover:bg-zinc-50"}`}
+                >
+                  ✨ Use AI
+                </button>
+              </div>
+
+              {/* MANUAL mode: add a single item */}
+              {buildMode === "manual" && (
+                <div>
+                  <p className="text-xs text-zinc-400 mb-2">Type each task and add it. Set priority + deadline on each in the Checklist below.</p>
+                  <div className="flex gap-2">
+                    <input type="text" value={newItem} onChange={(e) => setNewItem(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addItem()} placeholder="Add a checklist item..." className="flex-1 px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <button onClick={addItem} className="px-4 py-2 text-sm font-medium bg-zinc-800 text-white rounded-lg hover:bg-zinc-900 transition">Add</button>
+                  </div>
+                </div>
+              )}
+
+              {/* AI mode: generate, then review with priority + deadline per task */}
+              {buildMode === "ai" && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs text-zinc-400">Reads the plan above and proposes tasks. Set priority + deadline, edit, add or remove — then create them.</p>
+                    <button onClick={generateTasks} disabled={aiLoading} className="px-3 py-1.5 text-sm font-medium bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition disabled:opacity-50 shrink-0">
+                      {aiLoading ? "Generating..." : "✨ Generate Tasks"}
+                    </button>
+                  </div>
+
+                  {aiTasks.length > 0 && (
+                    <div className="space-y-2 mt-3">
+                      {aiTasks.map((t, i) => {
+                        const p = prio(t.priority);
+                        return (
+                          <div key={i} className="border border-zinc-200 rounded-lg p-3">
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={t.content}
+                                onChange={(e) => updateAiTask(i, { content: e.target.value })}
+                                className="flex-1 px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                              />
+                              <button onClick={() => setAiTasks((prev) => prev.filter((_, xi) => xi !== i))} className="text-xs text-zinc-400 hover:text-red-500 px-2 shrink-0">remove</button>
+                            </div>
+                            <div className="flex items-center gap-2 mt-2">
+                              <select value={t.priority} onChange={(e) => updateAiTask(i, { priority: e.target.value })} className="text-[11px] border rounded px-1.5 py-1 bg-white" style={{ color: p.dot }}>
+                                <option value="low">Low</option><option value="mid">Mid</option><option value="high">High</option>
+                              </select>
+                              <input type="date" value={t.deadline} onChange={(e) => updateAiTask(i, { deadline: e.target.value })} className="text-[11px] border border-zinc-300 rounded px-1.5 py-1" />
+                              <span className="text-[11px] text-zinc-400">{t.deadline ? "" : "set a deadline"}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      <div className="flex gap-2 pt-1">
+                        <input
+                          type="text"
+                          value={aiNewTask}
+                          onChange={(e) => setAiNewTask(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter" && aiNewTask.trim()) { setAiTasks((prev) => [...prev, { content: aiNewTask.trim(), priority: "mid", deadline: "" }]); setAiNewTask(""); } }}
+                          placeholder="Add another task..."
+                          className="flex-1 px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                        />
+                        <button onClick={() => { if (aiNewTask.trim()) { setAiTasks((prev) => [...prev, { content: aiNewTask.trim(), priority: "mid", deadline: "" }]); setAiNewTask(""); } }} className="px-3 py-2 text-sm font-medium border border-zinc-300 text-zinc-700 rounded-lg hover:bg-zinc-50 transition">Add</button>
+                      </div>
+
+                      <button onClick={createTasksFromAi} disabled={saving} className="mt-2 px-4 py-2 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition disabled:opacity-50">
+                        {saving ? "Creating..." : `Create ${aiTasks.length} Task(s) as Checklist`}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Checklist */}
           <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-6">
             <h3 className="font-semibold text-zinc-900 mb-3">Checklist</h3>
 
             {items.length === 0 ? (
-              <p className="text-sm text-zinc-400 italic mb-3">{canEditItems ? "No items yet. Add tasks below." : "No checklist yet. Waiting for manager to build it."}</p>
+              <p className="text-sm text-zinc-400 italic mb-3">{canEditItems ? "No items yet. Use the tools above to add tasks." : "No checklist yet. Waiting for manager to build it."}</p>
             ) : (
               <div className="space-y-2 mb-3">
                 {items.map((it) => {
@@ -361,58 +474,9 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
                 })}
               </div>
             )}
-
-            {canEditItems && (
-              <div className="flex gap-2">
-                <input type="text" value={newItem} onChange={(e) => setNewItem(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addItem()} placeholder="Add a checklist item..." className="flex-1 px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                <button onClick={addItem} className="px-4 py-2 text-sm font-medium bg-zinc-800 text-white rounded-lg hover:bg-zinc-900 transition">Add</button>
-              </div>
-            )}
           </div>
 
           {/* Manager review */}
-                    {/* AI Task Generator (manager reviewing a submitted report) */}
-          {canReview && report.status === "submitted" && (
-            <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-6">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-semibold text-zinc-900">AI Task Generator</h3>
-                <button onClick={generateTasks} disabled={aiLoading} className="px-3 py-1.5 text-sm font-medium bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition disabled:opacity-50">
-                  {aiLoading ? "Generating..." : "✨ Generate Tasks"}
-                </button>
-              </div>
-              <p className="text-xs text-zinc-400 mb-3">Reads the plan above and proposes tasks. Review, edit, add or remove — then create them as the checklist.</p>
-
-              {aiTasks.length > 0 && (
-                <div className="space-y-2">
-                  {aiTasks.map((t, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={t}
-                        onChange={(e) => setAiTasks((prev) => prev.map((x, xi) => (xi === i ? e.target.value : x)))}
-                        className="flex-1 px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
-                      />
-                      <button onClick={() => setAiTasks((prev) => prev.filter((_, xi) => xi !== i))} className="text-xs text-zinc-400 hover:text-red-500 px-2">remove</button>
-                    </div>
-                  ))}
-                  <div className="flex gap-2 pt-1">
-                    <input
-                      type="text"
-                      value={aiNewTask}
-                      onChange={(e) => setAiNewTask(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter" && aiNewTask.trim()) { setAiTasks((prev) => [...prev, aiNewTask.trim()]); setAiNewTask(""); } }}
-                      placeholder="Add another task..."
-                      className="flex-1 px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
-                    />
-                    <button onClick={() => { if (aiNewTask.trim()) { setAiTasks((prev) => [...prev, aiNewTask.trim()]); setAiNewTask(""); } }} className="px-3 py-2 text-sm font-medium border border-zinc-300 text-zinc-700 rounded-lg hover:bg-zinc-50 transition">Add</button>
-                  </div>
-                  <button onClick={createTasksFromAi} disabled={saving} className="mt-2 px-4 py-2 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition disabled:opacity-50">
-                    {saving ? "Creating..." : `Create ${aiTasks.length} Task(s) as Checklist`}
-                  </button>
-                </div>
-              )}const isOwnManagerTask = report?.is_manager_task && isOwner;
-            </div>
-          )}
           {canReview && (report.status === "submitted" || report.status === "approved") && (
             <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-6">
               <h3 className="font-semibold text-zinc-900 mb-3">Manager Review</h3>
