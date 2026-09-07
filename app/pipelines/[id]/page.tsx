@@ -82,6 +82,7 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
   const [logDialog, setLogDialog] = useState<{ row: PipelineRow; newStatus: string | null } | null>(null);
   const [logNote, setLogNote] = useState("");
   const [savingLog, setSavingLog] = useState(false);
+  const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({});
 
   const load = async () => {
     setLoading(true); setError(null);
@@ -248,6 +249,40 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
   // Is this a Hiring (company) pipeline?
   const isHiring = pipeline ? (pipeline.pipeline_type === "hiring" || (!pipeline.pipeline_type && pipeline.source_tab === "Jobs")) : false;
 
+  const sendToProspecting = async (targetRows: PipelineRow[]) => {
+    if (targetRows.length === 0) return;
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const ownerId = sess.session?.user.id;
+      const records = targetRows.map((row) => {
+        const d = row.row_data;
+        const enr = enrichments[(row.license_number || "").trim()];
+        const phone = enr?.phone || (enr?.extra_phones && enr.extra_phones[0]) || enr?.npi_phone || d["Phone"] || "";
+        const email = (enr?.emails && enr.emails[0]) || enr?.person_email || d["Email"] || "";
+        const fullName = d["Name"] || d["Full Name"] || `${d["First Name"] || ""} ${d["Last Name"] || ""}`.trim() || d["Business Name"] || "Unknown";
+        return {
+          owner_id: ownerId,
+          pipeline_row_id: row.id,
+          license_number: (row.license_number || "").trim(),
+          name: fullName,
+          first_name: d["First Name"] || null,
+          last_name: d["Last Name"] || null,
+          job_title: d["Job Title"] || d["Specialty"] || null,
+          phone: phone || null,
+          email: email || null,
+          source: "pipeline",
+          assigned: false,
+        };
+      });
+      const { error } = await supabase.from("prospecting_records").insert(records);
+      if (error) throw error;
+      alert(`Added ${records.length} to the Prospecting inbox. Assign them to a sequence from Prospecting.`);
+      setSelectedRows({});
+    } catch (e) {
+      alert("Failed to send to Prospecting: " + (e instanceof Error ? e.message : "unknown"));
+    }
+  };
+
   const sendToPool = async (row: PipelineRow) => {
     const d = row.row_data;
     const company = d["Business Name"] || d["Office Name"] || "";
@@ -404,6 +439,9 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
           )}
           <h1 className="text-lg font-semibold text-zinc-900 truncate">{pipeline?.name ?? "Pipeline"}</h1>
         </div>
+        <button onClick={() => sendToProspecting(rows)} className="px-3 py-1.5 text-xs font-medium bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition whitespace-nowrap" title="Send all rows to the Prospecting inbox">
+          → Send all to Prospecting
+        </button>
         <button onClick={() => exportToHeyReachCsv(rows, enrichments, pipeline?.name || "pipeline")} className="px-3 py-1.5 text-xs font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition whitespace-nowrap" title="Export rows with a LinkedIn URL to a HeyReach-ready CSV">
           ⬇ Export csv
         </button>
@@ -508,6 +546,9 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
                                 </>
                               )}  <button onClick={() => openLogOnly(r)} disabled={isBusy} className="px-3 py-1 text-xs font-medium border border-zinc-300 text-zinc-700 rounded-md hover:bg-zinc-50 transition disabled:opacity-40" title="Add a note to the outreach history">
                                 + Log
+                              </button>
+                              <button onClick={() => sendToProspecting([r])} className="px-3 py-1 text-xs font-medium bg-rose-600 text-white rounded-md hover:bg-rose-700 transition" title="Send this row to the Prospecting inbox">
+                                → Prospecting
                               </button>
                               <button onClick={() => runNppes(r)} disabled={isBusy} className="px-3 py-1 text-xs font-medium bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition disabled:opacity-60 disabled:cursor-not-allowed" title="Free official registry lookup">
                                 {isBusy ? "..." : enr?.npi_status ? "NPPES ↻" : "NPPES"}
