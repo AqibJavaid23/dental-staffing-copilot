@@ -81,6 +81,7 @@ export default function NavBar() {
 
         {/* Right side */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                    <Link href="/choose" className="text-sm font-medium hidden md:inline" style={{ color: "var(--brand-blue)" }}>⇄ Switch</Link>
           <NotificationBell userId={profile.id} />
           {/* Desktop: Team + Sign out */}
           {profile.role !== "member" && (

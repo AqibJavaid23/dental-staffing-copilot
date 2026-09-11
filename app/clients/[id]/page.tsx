@@ -48,6 +48,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
   const [touchOwner, setTouchOwner] = useState("");
   const [touchName, setTouchName] = useState("");
   const [notes, setNotes] = useState("");
+  const [editName, setEditName] = useState("");
 
   // new task form
   const [nt, setNt] = useState({ title: "", description: "", urgency: "medium", deadline: "", assigned_to: "" });
@@ -77,6 +78,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
       setTouchOwner(c.next_touch_owner || "");
       setTouchName(c.next_touch_name || "");
       setNotes(c.notes || "");
+      setEditName(c.name || "");
     }
     const { data: ts } = await supabase.from("client_tasks").select("*").eq("client_id", id).order("created_at", { ascending: false });
     setTasks((ts ?? []) as Task[]);
@@ -88,10 +90,15 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
-
+  const deleteClient = async () => {
+    if (!confirm(`Delete client "${client?.name}" and all its tasks? This cannot be undone.`)) return;
+    await supabase.from("clients").delete().eq("id", id);
+    window.location.href = "/clients";
+  };
   const saveClientFields = async () => {
     setSaving(true);
     await supabase.from("clients").update({
+      name: editName.trim() || client?.name,
       next_coaching_call: coachingCall ? new Date(coachingCall).toISOString() : null,
       next_touch_date: touchDate ? new Date(touchDate).toISOString() : null,
       next_touch_owner: touchOwner || null,
@@ -152,7 +159,16 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
             <Link href="/choose" className="text-sm text-zinc-500 hover:text-zinc-900 transition">⇄ Switch</Link>
           </div>
 
-          <h1 className="text-3xl font-semibold" style={{ color: "var(--deep-navy)" }}>{client.name}</h1>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <input
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              className="text-3xl font-semibold bg-transparent border-b-2 border-transparent hover:border-zinc-200 focus:border-teal-500 focus:outline-none"
+              style={{ color: "var(--deep-navy)" }}
+            />
+            <button onClick={deleteClient} className="text-sm text-zinc-400 hover:text-red-500 transition">Delete client</button>
+          </div>
+          <p className="text-xs text-zinc-400">Edit the name above, then click "Save Overview" to keep changes.</p>
 
           {/* Client fields (the "tab") */}
           <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-6">
