@@ -35,8 +35,8 @@ export default function Home() {
     }
 
     setSplash(true);
-    router.prefetch("/dashboard");
-    setTimeout(() => router.push("/dashboard"), 1500);
+    router.prefetch("/choose");
+    setTimeout(() => router.push("/choose"), 1500);
   };
 
   const handleReset = async (e: React.FormEvent) => {
