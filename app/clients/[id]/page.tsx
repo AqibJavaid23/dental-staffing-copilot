@@ -5,7 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/app/lib/supabase";
 import { useAuth } from "@/app/lib/useAuth";
 import BrandLoader from "@/app/components/BrandLoader";
-
+import { notify } from "@/app/lib/notify";
 type Client = {
   id: string; name: string;
   next_coaching_call: string | null;
@@ -118,6 +118,16 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
     });
     if (error) { alert("Failed: " + error.message); return; }
     await logActivity("task_created", `created task: ${nt.title.trim()} (${nt.urgency})`);
+    // Notify the assignee (if it's someone other than the creator)
+    if (nt.assigned_to && nt.assigned_to !== profile.id) {
+      await notify(
+        nt.assigned_to,
+        `${profile.full_name || profile.email || "Someone"} assigned you a ${nt.urgency} task on ${client?.name || "a client"}: "${nt.title.trim()}"`,
+        `/clients/${id}`,
+        "task_assigned",
+        profile.full_name || profile.email || undefined
+      );
+    }
     setNt({ title: "", description: "", urgency: "medium", deadline: "", assigned_to: "" });
     load();
   };

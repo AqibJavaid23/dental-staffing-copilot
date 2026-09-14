@@ -69,7 +69,10 @@ export default function ClientsPage() {
               <h1 className="text-2xl font-semibold" style={{ color: "var(--deep-navy)" }}>🦷 Clients</h1>
               <p className="text-sm text-zinc-500 mt-0.5">Every client at a glance — coaching calls, touch points, and open tasks.</p>
             </div>
-            <Link href="/choose" className="text-sm text-zinc-500 hover:text-zinc-900 transition">⇄ Switch</Link>
+            <div className="flex items-center gap-4">
+              <Link href="/clients/my-tasks" className="text-sm font-medium text-teal-600 hover:text-teal-800 transition">📋 My Tasks</Link>
+              <Link href="/choose" className="text-sm text-zinc-500 hover:text-zinc-900 transition">⇄ Switch</Link>
+            </div>
           </div>
 
           {/* Create client */}
