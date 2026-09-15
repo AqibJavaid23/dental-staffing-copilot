@@ -6,6 +6,7 @@ import { supabase } from "@/app/lib/supabase";
 import { useAuth } from "@/app/lib/useAuth";
 import BrandLoader from "@/app/components/BrandLoader";
 import { notify } from "@/app/lib/notify";
+import StaffingPanel from "@/app/components/StaffingPanel";
 type Client = {
   id: string; name: string;
   next_coaching_call: string | null;
@@ -321,6 +322,9 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
               </details>
             )}
           </div>
+
+          {/* Staffing & recruiting visibility */}
+          <StaffingPanel clientId={id} clientName={client.name} people={people} me={profile} />
 
           {/* Activity / history */}
           <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-6">
