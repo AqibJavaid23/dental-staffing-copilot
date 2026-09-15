@@ -68,6 +68,32 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
     });
   };
 
+  // --- @mention tagging: type @firstname in a task or the notes to tag a teammate; they get notified ---
+  const handleOf = (p: Person) =>
+    ((p.full_name && p.full_name.trim()) ? p.full_name.trim().split(/\s+/)[0] : p.email.split("@")[0]).toLowerCase();
+
+  const notifyMentions = async (text: string, context: string, skipIds: string[] = []) => {
+    if (!text || !profile) return;
+    const found = new Set<string>();
+    const re = /@([a-zA-Z0-9._-]+)/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) found.add(m[1].toLowerCase());
+    if (found.size === 0) return;
+    const done = new Set<string>([profile.id, ...skipIds]);
+    for (const p of people) {
+      if (done.has(p.id) || !found.has(handleOf(p))) continue;
+      done.add(p.id);
+      await notify(
+        p.id,
+        `${profile.full_name || profile.email || "Someone"} tagged you on ${client?.name || "a client"} — ${context}`,
+        `/clients/${id}`,
+        "mention",
+        profile.full_name || profile.email || undefined
+      );
+      await logActivity("mention", `tagged ${p.full_name || p.email} ${context}`);
+    }
+  };
+
   const load = useCallback(async () => {
     setLoading(true);
     const { data: c } = await supabase.from("clients").select("*").eq("id", id).single();
@@ -105,6 +131,8 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
       next_touch_name: touchName || null,
       notes: notes || null,
     }).eq("id", id);
+    // Tag any teammates mentioned with @name in the client notes
+    await notifyMentions(notes, "in the client notes");
     setSaving(false);
     load();
   };
@@ -128,6 +156,8 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
         profile.full_name || profile.email || undefined
       );
     }
+    // Tag any teammates mentioned with @name in the title/description (skip the assignee — already notified)
+    await notifyMentions(`${nt.title} ${nt.description || ""}`, `in a task: "${nt.title.trim()}"`, nt.assigned_to ? [nt.assigned_to] : []);
     setNt({ title: "", description: "", urgency: "medium", deadline: "", assigned_to: "" });
     load();
   };
@@ -206,7 +236,10 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
             </div>
             <div className="mt-4">
               <label className="block text-xs font-medium text-zinc-500 mb-1">📝 Client notes</label>
-              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="General notes about this client..." className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-500" />
+              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="General notes about this client... type @name to tag a teammate" className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-500" />
+              {people.length > 0 && (
+                <p className="text-[11px] text-zinc-400 mt-1">Tag a teammate with <span className="font-medium text-zinc-500">@name</span> — they get notified when you Save. Available: {people.map((p) => "@" + handleOf(p)).join(", ")}</p>
+              )}
             </div>
             <button onClick={saveClientFields} disabled={saving} className="mt-3 px-4 py-2 text-sm font-medium bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition disabled:opacity-50">{saving ? "Saving..." : "Save Overview"}</button>
           </div>
@@ -218,7 +251,10 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
             {/* Add task */}
             <div className="border border-zinc-200 rounded-xl p-4 mb-4 bg-zinc-50/50">
               <input type="text" value={nt.title} onChange={(e) => setNt({ ...nt, title: e.target.value })} placeholder="Task title..." className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-teal-500" />
-              <textarea value={nt.description} onChange={(e) => setNt({ ...nt, description: e.target.value })} rows={2} placeholder="Description / notes (optional)..." className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm mb-2 resize-none focus:outline-none focus:ring-2 focus:ring-teal-500" />
+              <textarea value={nt.description} onChange={(e) => setNt({ ...nt, description: e.target.value })} rows={2} placeholder="Description / notes (optional)... type @name to tag a teammate" className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm mb-1 resize-none focus:outline-none focus:ring-2 focus:ring-teal-500" />
+              {people.length > 0 && (
+                <p className="text-[11px] text-zinc-400 mb-2">Tag a teammate with <span className="font-medium text-zinc-500">@name</span> — they get notified. Available: {people.map((p) => "@" + handleOf(p)).join(", ")}</p>
+              )}
               <div className="flex gap-2 flex-wrap items-center">
                 <select value={nt.urgency} onChange={(e) => setNt({ ...nt, urgency: e.target.value })} className="text-sm border border-zinc-300 rounded-lg px-2 py-1.5 bg-white">
                   <option value="critical">🔴 Critical</option>
