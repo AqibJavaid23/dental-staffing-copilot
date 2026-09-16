@@ -70,6 +70,7 @@ export default function ClientsPage() {
               <p className="text-sm text-zinc-500 mt-0.5">Every client at a glance — coaching calls, touch points, and open tasks.</p>
             </div>
             <div className="flex items-center gap-4">
+              <Link href="/clients/critical" className="text-sm font-medium text-red-600 hover:text-red-800 transition">🔥 All Critical</Link>
               <Link href="/clients/my-tasks" className="text-sm font-medium text-teal-600 hover:text-teal-800 transition">📋 My Tasks</Link>
               <Link href="/choose" className="text-sm text-zinc-500 hover:text-zinc-900 transition">⇄ Switch</Link>
             </div>
