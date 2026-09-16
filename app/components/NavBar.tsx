@@ -38,9 +38,9 @@ export default function NavBar() {
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-zinc-200 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
         {/* Logo */}
-        <Link href="/dashboard" className="flex items-center gap-2 shrink-0" onClick={() => setMenuOpen(false)}>
+        <Link href="/dashboard" className="flex items-center gap-2 shrink-0 lg:-ml-3" onClick={() => setMenuOpen(false)}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/icon-color.png" alt="" className="w-9 h-9" />
+          <img src="/brand/icon-color.png" alt="" className="w-12 h-12" />
           <span className="text-sm font-bold tracking-wide hidden sm:inline" style={{ color: "var(--brand-navy)" }}>
             DENTAL <span className="font-medium" style={{ color: "var(--brand-blue)" }}>CO-PILOT</span>
           </span>
@@ -80,7 +80,7 @@ export default function NavBar() {
         </nav>
 
         {/* Right side */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0 lg:ml-4 lg:pl-5 lg:border-l lg:border-zinc-200">
                     <Link href="/choose" className="text-sm font-medium hidden md:inline" style={{ color: "var(--brand-blue)" }}>⇄ Switch</Link>
           <NotificationBell userId={profile.id} />
           {/* Desktop: Team + Sign out */}
