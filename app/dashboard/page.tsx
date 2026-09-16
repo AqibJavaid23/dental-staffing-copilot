@@ -8,7 +8,7 @@ import BrandLoader from "@/app/components/BrandLoader";
 import MyWeek from "@/app/components/MyWeek";
 import NotificationBell from "@/app/components/NotificationBell";
 import TaskPanel from "@/app/components/TaskPanel";
-
+import AssignedTasks from "@/app/components/AssignedTasks";
 function greeting() {
   const h = new Date().getHours();
   if (h < 12) return "Good morning ☀️";
@@ -93,6 +93,7 @@ export default function Dashboard() {
             {/* LEFT — task panel */}
             <div>
               {profile && <TaskPanel profile={profile} />}
+              {profile && <AssignedTasks userId={profile.id} />}
             </div>
 
             {/* RIGHT — My Week stats + card slider */}
