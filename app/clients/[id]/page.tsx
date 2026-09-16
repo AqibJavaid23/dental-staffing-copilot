@@ -73,25 +73,34 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
   const handleOf = (p: Person) =>
     ((p.full_name && p.full_name.trim()) ? p.full_name.trim().split(/\s+/)[0] : p.email.split("@")[0]).toLowerCase();
 
-  const notifyMentions = async (text: string, context: string, skipIds: string[] = []) => {
+  const snippetOf = (s: string, n = 180) => {
+    const t = (s || "").replace(/\s+/g, " ").trim();
+    return t.length > n ? t.slice(0, n) + "…" : t;
+  };
+
+  const notifyMentions = async (text: string, where: string, snippet: string, skipIds: string[] = []) => {
     if (!text || !profile) return;
     const found = new Set<string>();
     const re = /@([a-zA-Z0-9._-]+)/g;
     let m: RegExpExecArray | null;
     while ((m = re.exec(text)) !== null) found.add(m[1].toLowerCase());
     if (found.size === 0) return;
+    const actor = profile.full_name || profile.email || "Someone";
+    const clean = snippetOf(snippet);
     const done = new Set<string>([profile.id, ...skipIds]);
     for (const p of people) {
       if (done.has(p.id) || !found.has(handleOf(p))) continue;
       done.add(p.id);
       await notify(
         p.id,
-        `${profile.full_name || profile.email || "Someone"} tagged you on ${client?.name || "a client"} — ${context}`,
+        clean
+          ? `${actor} mentioned you in a ${where} on ${client?.name || "a client"}: "${clean}"`
+          : `${actor} mentioned you in a ${where} on ${client?.name || "a client"}`,
         `/clients/${id}`,
         "mention",
-        profile.full_name || profile.email || undefined
+        actor
       );
-      await logActivity("mention", `tagged ${p.full_name || p.email} ${context}`);
+      await logActivity("mention", `tagged ${p.full_name || p.email} in a ${where}`);
     }
   };
 
@@ -133,7 +142,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
       notes: notes || null,
     }).eq("id", id);
     // Tag any teammates mentioned with @name in the client notes
-    await notifyMentions(notes, "in the client notes");
+    await notifyMentions(notes, "note", notes);
     setSaving(false);
     load();
   };
@@ -158,7 +167,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
       );
     }
     // Tag any teammates mentioned with @name in the title/description (skip the assignee — already notified)
-    await notifyMentions(`${nt.title} ${nt.description || ""}`, `in a task: "${nt.title.trim()}"`, nt.assigned_to ? [nt.assigned_to] : []);
+    await notifyMentions(`${nt.title} ${nt.description || ""}`, "task", `${nt.title.trim()}${nt.description ? " — " + nt.description : ""}`, nt.assigned_to ? [nt.assigned_to] : []);
     setNt({ title: "", description: "", urgency: "medium", deadline: "", assigned_to: "" });
     load();
   };
