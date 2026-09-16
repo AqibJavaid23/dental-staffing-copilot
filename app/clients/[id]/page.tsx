@@ -7,6 +7,7 @@ import { useAuth } from "@/app/lib/useAuth";
 import BrandLoader from "@/app/components/BrandLoader";
 import { notify } from "@/app/lib/notify";
 import StaffingPanel from "@/app/components/StaffingPanel";
+import MentionTextarea from "@/app/components/MentionTextarea";
 type Client = {
   id: string; name: string;
   next_coaching_call: string | null;
@@ -246,7 +247,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
             </div>
             <div className="mt-4">
               <label className="block text-xs font-medium text-zinc-500 mb-1">📝 Client notes</label>
-              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="General notes about this client... type @name to tag a teammate" className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-500" />
+              <MentionTextarea value={notes} onChange={setNotes} people={people} rows={3} placeholder="General notes about this client... type @name to tag a teammate" className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-500" />
               {people.length > 0 && (
                 <p className="text-[11px] text-zinc-400 mt-1">Tag a teammate with <span className="font-medium text-zinc-500">@name</span> — they get notified when you Save. Available: {people.map((p) => "@" + handleOf(p)).join(", ")}</p>
               )}
@@ -261,7 +262,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
             {/* Add task */}
             <div className="border border-zinc-200 rounded-xl p-4 mb-4 bg-zinc-50/50">
               <input type="text" value={nt.title} onChange={(e) => setNt({ ...nt, title: e.target.value })} placeholder="Task title..." className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-teal-500" />
-              <textarea value={nt.description} onChange={(e) => setNt({ ...nt, description: e.target.value })} rows={2} placeholder="Description / notes (optional)... type @name to tag a teammate" className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm mb-1 resize-none focus:outline-none focus:ring-2 focus:ring-teal-500" />
+              <MentionTextarea value={nt.description} onChange={(v) => setNt({ ...nt, description: v })} people={people} rows={2} placeholder="Description / notes (optional)... type @name to tag a teammate" className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm mb-1 resize-none focus:outline-none focus:ring-2 focus:ring-teal-500" />
               {people.length > 0 && (
                 <p className="text-[11px] text-zinc-400 mb-2">Tag a teammate with <span className="font-medium text-zinc-500">@name</span> — they get notified. Available: {people.map((p) => "@" + handleOf(p)).join(", ")}</p>
               )}
