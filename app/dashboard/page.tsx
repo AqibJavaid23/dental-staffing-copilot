@@ -89,16 +89,16 @@ export default function Dashboard() {
           </div>
 
           {/* Two-column workspace: tasks left, cards right */}
-          <div className="grid grid-cols-1 lg:grid-cols-[minmax(320px,380px)_1fr] gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* LEFT — task panel */}
             <div>
               {profile && <TaskPanel profile={profile} />}
-              {profile && <AssignedTasks userId={profile.id} />}
             </div>
 
             {/* RIGHT — My Week stats + card slider */}
             <div className="min-w-0">
               {profile && <MyWeek userId={profile.id} />}
+              {profile && <AssignedTasks userId={profile.id} />}
 
               <div className="relative">
                 {canLeft && (
