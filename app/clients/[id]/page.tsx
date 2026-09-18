@@ -8,6 +8,8 @@ import BrandLoader from "@/app/components/BrandLoader";
 import { notify } from "@/app/lib/notify";
 import StaffingPanel from "@/app/components/StaffingPanel";
 import MentionTextarea from "@/app/components/MentionTextarea";
+import CallLog from "@/app/components/CallLog";
+
 type Client = {
   id: string; name: string;
   next_coaching_call: string | null;
@@ -43,6 +45,10 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
   const [people, setPeople] = useState<Person[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // which section is open (one at a time); "" = all collapsed
+  const [open, setOpen] = useState<string>("overview");
+  const toggle = (k: string) => setOpen((cur) => (cur === k ? "" : k));
 
   // editable client fields
   const [coachingCall, setCoachingCall] = useState("");
@@ -201,6 +207,8 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
   const order = { critical: 0, high: 1, medium: 2, low: 3 };
   openTasks.sort((a, b) => (order[a.urgency as keyof typeof order] ?? 9) - (order[b.urgency as keyof typeof order] ?? 9));
 
+  const chevron = (k: string) => <span className="text-zinc-400 text-sm">{open === k ? "▾" : "▸"}</span>;
+
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50">
       <main className="flex-1 p-6">
@@ -219,124 +227,141 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
             />
             <button onClick={deleteClient} className="text-sm text-zinc-400 hover:text-red-500 transition">Delete client</button>
           </div>
-          <p className="text-xs text-zinc-400">Edit the name above, then click "Save Overview" to keep changes.</p>
+          <p className="text-xs text-zinc-400">Click a section to open it. Editing the name above is saved with "Save Overview".</p>
 
-          {/* Client fields (the "tab") */}
+          {/* SECTION: Client Overview (collapsible) — includes the Call Log */}
           <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-6">
-            <h3 className="font-semibold text-zinc-900 mb-4">Client Overview</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-zinc-500 mb-1">📞 Next coaching call (George)</label>
-                <input type="datetime-local" value={coachingCall} onChange={(e) => setCoachingCall(e.target.value)} className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+            <button onClick={() => toggle("overview")} className="w-full flex items-center justify-between text-left">
+              <h3 className="font-semibold text-zinc-900">Client Overview</h3>
+              {chevron("overview")}
+            </button>
+            {open === "overview" && (
+              <div className="mt-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-500 mb-1">📞 Next coaching call (George)</label>
+                    <input type="datetime-local" value={coachingCall} onChange={(e) => setCoachingCall(e.target.value)} className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-500 mb-1">🤝 Next touch point — date</label>
+                    <input type="datetime-local" value={touchDate} onChange={(e) => setTouchDate(e.target.value)} className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-500 mb-1">Touch point — owner</label>
+                    <select value={touchOwner} onChange={(e) => setTouchOwner(e.target.value)} className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500">
+                      <option value="">Choose team member...</option>
+                      {people.map((p) => <option key={p.id} value={p.id}>{p.full_name || p.email}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-500 mb-1">Touch point — call / interaction name</label>
+                    <input type="text" value={touchName} onChange={(e) => setTouchName(e.target.value)} placeholder="e.g. Weekly check-in" className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">📝 Client notes</label>
+                  <MentionTextarea value={notes} onChange={setNotes} people={people} rows={3} placeholder="General notes about this client... type @name to tag a teammate" className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                  {people.length > 0 && (
+                    <p className="text-[11px] text-zinc-400 mt-1">Tag a teammate with <span className="font-medium text-zinc-500">@name</span> — they get notified when you Save. Available: {people.map((p) => "@" + handleOf(p)).join(", ")}</p>
+                  )}
+                </div>
+
+                {/* Call Log lives inside the Overview form */}
+                <CallLog clientId={id} clientName={client.name} me={profile} embedded />
+
+                <button onClick={saveClientFields} disabled={saving} className="mt-4 px-4 py-2 text-sm font-medium bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition disabled:opacity-50">{saving ? "Saving..." : "Save Overview"}</button>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-500 mb-1">🤝 Next touch point — date</label>
-                <input type="datetime-local" value={touchDate} onChange={(e) => setTouchDate(e.target.value)} className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-500 mb-1">Touch point — owner</label>
-                <select value={touchOwner} onChange={(e) => setTouchOwner(e.target.value)} className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500">
-                  <option value="">Choose team member...</option>
-                  {people.map((p) => <option key={p.id} value={p.id}>{p.full_name || p.email}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-500 mb-1">Touch point — call / interaction name</label>
-                <input type="text" value={touchName} onChange={(e) => setTouchName(e.target.value)} placeholder="e.g. Weekly check-in" className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
-              </div>
-            </div>
-            <div className="mt-4">
-              <label className="block text-xs font-medium text-zinc-500 mb-1">📝 Client notes</label>
-              <MentionTextarea value={notes} onChange={setNotes} people={people} rows={3} placeholder="General notes about this client... type @name to tag a teammate" className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-500" />
-              {people.length > 0 && (
-                <p className="text-[11px] text-zinc-400 mt-1">Tag a teammate with <span className="font-medium text-zinc-500">@name</span> — they get notified when you Save. Available: {people.map((p) => "@" + handleOf(p)).join(", ")}</p>
-              )}
-            </div>
-            <button onClick={saveClientFields} disabled={saving} className="mt-3 px-4 py-2 text-sm font-medium bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition disabled:opacity-50">{saving ? "Saving..." : "Save Overview"}</button>
+            )}
           </div>
 
-          {/* Tasks */}
+          {/* SECTION: Tasks (collapsible) */}
           <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-6">
-            <h3 className="font-semibold text-zinc-900 mb-4">Tasks</h3>
+            <button onClick={() => toggle("tasks")} className="w-full flex items-center justify-between text-left">
+              <h3 className="font-semibold text-zinc-900">Tasks {openTasks.length > 0 && <span className="text-xs font-normal text-zinc-400">({openTasks.length} open)</span>}</h3>
+              {chevron("tasks")}
+            </button>
+            {open === "tasks" && (
+              <div className="mt-4">
+                {/* Add task */}
+                <div className="border border-zinc-200 rounded-xl p-4 mb-4 bg-zinc-50/50">
+                  <input type="text" value={nt.title} onChange={(e) => setNt({ ...nt, title: e.target.value })} placeholder="Task title..." className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                  <MentionTextarea value={nt.description} onChange={(v) => setNt({ ...nt, description: v })} people={people} rows={2} placeholder="Description / notes (optional)... type @name to tag a teammate" className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm mb-1 resize-none focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                  {people.length > 0 && (
+                    <p className="text-[11px] text-zinc-400 mb-2">Tag a teammate with <span className="font-medium text-zinc-500">@name</span> — they get notified. Available: {people.map((p) => "@" + handleOf(p)).join(", ")}</p>
+                  )}
+                  <div className="flex gap-2 flex-wrap items-center">
+                    <select value={nt.urgency} onChange={(e) => setNt({ ...nt, urgency: e.target.value })} className="text-sm border border-zinc-300 rounded-lg px-2 py-1.5 bg-white">
+                      <option value="critical">🔴 Critical</option>
+                      <option value="high">🟠 High</option>
+                      <option value="medium">🟡 Medium</option>
+                      <option value="low">🟢 Low</option>
+                    </select>
+                    <input type="date" value={nt.deadline} onChange={(e) => setNt({ ...nt, deadline: e.target.value })} className="text-sm border border-zinc-300 rounded-lg px-2 py-1.5" />
+                    <select value={nt.assigned_to} onChange={(e) => setNt({ ...nt, assigned_to: e.target.value })} className="text-sm border border-zinc-300 rounded-lg px-2 py-1.5 bg-white">
+                      <option value="">Assign to...</option>
+                      {people.map((p) => <option key={p.id} value={p.id}>{p.full_name || p.email}</option>)}
+                    </select>
+                    <button onClick={addTask} className="px-4 py-1.5 text-sm font-medium bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition ml-auto">Add Task</button>
+                  </div>
+                </div>
 
-            {/* Add task */}
-            <div className="border border-zinc-200 rounded-xl p-4 mb-4 bg-zinc-50/50">
-              <input type="text" value={nt.title} onChange={(e) => setNt({ ...nt, title: e.target.value })} placeholder="Task title..." className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-teal-500" />
-              <MentionTextarea value={nt.description} onChange={(v) => setNt({ ...nt, description: v })} people={people} rows={2} placeholder="Description / notes (optional)... type @name to tag a teammate" className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm mb-1 resize-none focus:outline-none focus:ring-2 focus:ring-teal-500" />
-              {people.length > 0 && (
-                <p className="text-[11px] text-zinc-400 mb-2">Tag a teammate with <span className="font-medium text-zinc-500">@name</span> — they get notified. Available: {people.map((p) => "@" + handleOf(p)).join(", ")}</p>
-              )}
-              <div className="flex gap-2 flex-wrap items-center">
-                <select value={nt.urgency} onChange={(e) => setNt({ ...nt, urgency: e.target.value })} className="text-sm border border-zinc-300 rounded-lg px-2 py-1.5 bg-white">
-                  <option value="critical">🔴 Critical</option>
-                  <option value="high">🟠 High</option>
-                  <option value="medium">🟡 Medium</option>
-                  <option value="low">🟢 Low</option>
-                </select>
-                <input type="date" value={nt.deadline} onChange={(e) => setNt({ ...nt, deadline: e.target.value })} className="text-sm border border-zinc-300 rounded-lg px-2 py-1.5" />
-                <select value={nt.assigned_to} onChange={(e) => setNt({ ...nt, assigned_to: e.target.value })} className="text-sm border border-zinc-300 rounded-lg px-2 py-1.5 bg-white">
-                  <option value="">Assign to...</option>
-                  {people.map((p) => <option key={p.id} value={p.id}>{p.full_name || p.email}</option>)}
-                </select>
-                <button onClick={addTask} className="px-4 py-1.5 text-sm font-medium bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition ml-auto">Add Task</button>
-              </div>
-            </div>
-
-            {/* Open tasks */}
-            {openTasks.length === 0 ? (
-              <p className="text-sm text-zinc-400 italic mb-2">No open tasks.</p>
-            ) : (
-              <div className="space-y-2 mb-4">
-                {openTasks.map((t) => {
-                  const u = urg(t.urgency);
-                  const overdue = t.deadline && new Date(t.deadline) < new Date(new Date().toDateString());
-                  return (
-                    <div key={t.id} className="rounded-lg border-l-4 p-3" style={{ borderLeftColor: u.dot, backgroundColor: u.bg }}>
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <div className="font-medium text-zinc-900 text-sm">{t.title}</div>
-                          {t.description && <div className="text-xs text-zinc-600 mt-0.5">{t.description}</div>}
-                          <div className="flex items-center gap-2 mt-1.5 flex-wrap text-[11px]">
-                            <span className="font-semibold px-1.5 py-0.5 rounded" style={{ backgroundColor: u.dot + "22", color: u.text }}>{u.emoji} {u.label}</span>
-                            {t.deadline && <span className={overdue ? "text-red-600 font-semibold" : "text-zinc-500"}>{overdue ? "⚠ " : "📅 "}{new Date(t.deadline).toLocaleDateString()}</span>}
-                            <span className="text-zinc-500">👤 {nameOf(t.assigned_to)}</span>
+                {/* Open tasks */}
+                {openTasks.length === 0 ? (
+                  <p className="text-sm text-zinc-400 italic mb-2">No open tasks.</p>
+                ) : (
+                  <div className="space-y-2 mb-4">
+                    {openTasks.map((t) => {
+                      const u = urg(t.urgency);
+                      const overdue = t.deadline && new Date(t.deadline) < new Date(new Date().toDateString());
+                      return (
+                        <div key={t.id} className="rounded-lg border-l-4 p-3" style={{ borderLeftColor: u.dot, backgroundColor: u.bg }}>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <div className="font-medium text-zinc-900 text-sm">{t.title}</div>
+                              {t.description && <div className="text-xs text-zinc-600 mt-0.5">{t.description}</div>}
+                              <div className="flex items-center gap-2 mt-1.5 flex-wrap text-[11px]">
+                                <span className="font-semibold px-1.5 py-0.5 rounded" style={{ backgroundColor: u.dot + "22", color: u.text }}>{u.emoji} {u.label}</span>
+                                {t.deadline && <span className={overdue ? "text-red-600 font-semibold" : "text-zinc-500"}>{overdue ? "⚠ " : "📅 "}{new Date(t.deadline).toLocaleDateString()}</span>}
+                                <span className="text-zinc-500">👤 {nameOf(t.assigned_to)}</span>
+                              </div>
+                            </div>
+                            <div className="flex flex-col gap-1 shrink-0">
+                              <select value={t.status} onChange={(e) => setTaskStatus(t, e.target.value)} className="text-[11px] border border-zinc-300 rounded px-1.5 py-0.5 bg-white">
+                                <option value="open">Open</option>
+                                <option value="in_progress">In Progress</option>
+                                <option value="completed">Completed</option>
+                              </select>
+                              <button onClick={() => deleteTask(t)} className="text-[11px] text-zinc-400 hover:text-red-500">delete</button>
+                            </div>
                           </div>
                         </div>
-                        <div className="flex flex-col gap-1 shrink-0">
-                          <select value={t.status} onChange={(e) => setTaskStatus(t, e.target.value)} className="text-[11px] border border-zinc-300 rounded px-1.5 py-0.5 bg-white">
-                            <option value="open">Open</option>
-                            <option value="in_progress">In Progress</option>
-                            <option value="completed">Completed</option>
-                          </select>
-                          <button onClick={() => deleteTask(t)} className="text-[11px] text-zinc-400 hover:text-red-500">delete</button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                      );
+                    })}
+                  </div>
+                )}
 
-            {/* Completed (task history) */}
-            {doneTasks.length > 0 && (
-              <details>
-                <summary className="text-sm font-medium text-zinc-500 cursor-pointer">Completed ({doneTasks.length})</summary>
-                <div className="space-y-1 mt-2">
-                  {doneTasks.map((t) => (
-                    <div key={t.id} className="text-xs flex items-center gap-2 px-2 py-1.5 rounded hover:bg-zinc-50">
-                      <span className="line-through text-zinc-400">{t.title}</span>
-                      <span className="text-zinc-400 ml-auto">{t.completed_at ? new Date(t.completed_at).toLocaleDateString() : ""}</span>
+                {/* Completed (task history) */}
+                {doneTasks.length > 0 && (
+                  <details>
+                    <summary className="text-sm font-medium text-zinc-500 cursor-pointer">Completed ({doneTasks.length})</summary>
+                    <div className="space-y-1 mt-2">
+                      {doneTasks.map((t) => (
+                        <div key={t.id} className="text-xs flex items-center gap-2 px-2 py-1.5 rounded hover:bg-zinc-50">
+                          <span className="line-through text-zinc-400">{t.title}</span>
+                          <span className="text-zinc-400 ml-auto">{t.completed_at ? new Date(t.completed_at).toLocaleDateString() : ""}</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </details>
+                  </details>
+                )}
+              </div>
             )}
           </div>
 
-          {/* Staffing & recruiting visibility */}
-          <StaffingPanel clientId={id} clientName={client.name} people={people} me={profile} />
+          {/* SECTION: Staffing & recruiting (collapsible, handled inside the component) */}
+          <StaffingPanel clientId={id} clientName={client.name} people={people} me={profile} open={open === "staffing"} onToggle={() => toggle("staffing")} />
 
-          {/* Activity / history */}
+          {/* Activity / history — always open */}
           <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-6">
             <h3 className="font-semibold text-zinc-900 mb-3">History</h3>
             {activity.length === 0 ? (

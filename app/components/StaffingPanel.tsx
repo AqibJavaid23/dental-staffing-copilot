@@ -37,9 +37,9 @@ const POSTING: Record<string, { label: string; color: string; bg: string }> = {
 const postStatus = (s: string) => POSTING[s] || POSTING.not_posted;
 
 export default function StaffingPanel({
-  clientId, clientName, people, me,
+  clientId, clientName, people, me, open = true, onToggle,
 }: {
-  clientId: string; clientName: string; people: Person[]; me: Me;
+  clientId: string; clientName: string; people: Person[]; me: Me; open?: boolean; onToggle?: () => void;
 }) {
   const [roles, setRoles] = useState<Role[]>([]);
   const [cands, setCands] = useState<Candidate[]>([]);
@@ -132,8 +132,13 @@ export default function StaffingPanel({
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-6">
-      <div className="flex items-center justify-between mb-1">
+      <button onClick={onToggle} className="w-full flex items-center justify-between text-left">
         <h3 className="font-semibold text-zinc-900">Staffing &amp; Recruiting</h3>
+        <span className="text-zinc-400 text-sm">{open ? "▾" : "▸"}</span>
+      </button>
+      {open && (
+      <div className="mt-3">
+      <div className="flex items-center justify-end mb-1">
         <button onClick={() => setShowAddRole((s) => !s)} className="text-sm font-medium text-teal-600 hover:text-teal-700 transition">{showAddRole ? "Cancel" : "+ Add role"}</button>
       </div>
       <p className="text-xs text-zinc-400 mb-4">Open roles at {clientName}, and where each candidate is in the pipeline.</p>
@@ -174,7 +179,7 @@ export default function StaffingPanel({
           {roles.map((r) => {
             const ps = postStatus(r.posting_status);
             const roleCands = candsFor(r.id);
-            const open = expanded === r.id;
+            const isOpen = expanded === r.id;
             const f = ncFor(r.id);
             return (
               <div key={r.id} className="border border-zinc-200 rounded-xl overflow-hidden">
@@ -202,7 +207,7 @@ export default function StaffingPanel({
                     <select value={r.posting_status} onChange={(e) => updateRole(r.id, { posting_status: e.target.value })} className="text-[11px] border border-zinc-300 rounded px-1.5 py-0.5 bg-white">
                       {Object.keys(POSTING).map((k) => <option key={k} value={k}>{POSTING[k].label}</option>)}
                     </select>
-                    <button onClick={() => setExpanded(open ? null : r.id)} className="text-[11px] text-teal-600 hover:text-teal-700">{open ? "Hide" : "Candidates"}</button>
+                    <button onClick={() => setExpanded(isOpen ? null : r.id)} className="text-[11px] text-teal-600 hover:text-teal-700">{isOpen ? "Hide" : "Candidates"}</button>
                     <button onClick={() => deleteRole(r)} className="text-[11px] text-zinc-400 hover:text-red-500">delete</button>
                   </div>
                 </div>
@@ -221,7 +226,7 @@ export default function StaffingPanel({
                 )}
 
                 {/* Candidates (expanded) */}
-                {open && (
+                {isOpen && (
                   <div className="border-t border-zinc-100 bg-zinc-50/40 p-3 space-y-2">
                     {/* Add candidate */}
                     <div className="bg-white border border-zinc-200 rounded-lg p-2 space-y-1.5">
@@ -269,6 +274,8 @@ export default function StaffingPanel({
             );
           })}
         </div>
+      )}
+      </div>
       )}
     </div>
   );
