@@ -11,7 +11,7 @@ import BrandLoader from "@/app/components/BrandLoader";
 import { findMyPipelineByName, createPipeline, mergeIntoPipeline } from "@/app/lib/savePipeline";
 const ROW_LIMIT = 5000;
 const PAGE_SIZE = 50;
-const EXPECTED = ["First Name", "Last Name", "Business Name", "City", "State", "License Number"];
+const EXPECTED = ["Name", "EmailAddress", "Phone", "Location", "Status", "Email Campaign", "SMS campaign", "Remarks"];
 
 type UploadRow = {
   id: string;
@@ -110,8 +110,8 @@ export default function MyDataPage() {
       } else {
         throw new Error("Please upload a .csv or .xlsx file");
       }
-      parsed = parsed.filter((r) => (r["First Name"] || r["Last Name"] || r["Business Name"]));
-      if (parsed.length === 0) throw new Error("No usable rows found. Check your column headers match the Provider Database.");
+      parsed = parsed.filter((r) => (r["Name"] || r["EmailAddress"] || r["Phone"]));
+      if (parsed.length === 0) throw new Error("No usable rows found. Check your column headers match the template (Name, EmailAddress, Phone, Location, ...).");
       if (myRowCount + parsed.length > ROW_LIMIT) {
         throw new Error(`This upload would exceed your ${ROW_LIMIT.toLocaleString()}-row limit. You have ${myRowCount.toLocaleString()} rows; this file has ${parsed.length.toLocaleString()}.`);
       }
@@ -159,7 +159,7 @@ export default function MyDataPage() {
     if (!s) return batchRows;
     return batchRows.filter((r) => {
       const d = r.row_data;
-      return `${d["First Name"] ?? ""} ${d["Last Name"] ?? ""} ${d["Business Name"] ?? ""} ${d["City"] ?? ""}`.toLowerCase().includes(s);
+      return `${d["Name"] ?? ""} ${d["EmailAddress"] ?? ""} ${d["Location"] ?? ""} ${d["Phone"] ?? ""}`.toLowerCase().includes(s);
     });
   }, [batchRows, search]);
 
@@ -173,10 +173,27 @@ export default function MyDataPage() {
   const selectedCount = Object.keys(selected).length;
 
  // Build the rows to save (shared by create + merge)
+  // Map the outreach-list columns into the fields the pipeline enrichment expects
+  const mapForPipeline = (d: Record<string, string>): Record<string, string> => {
+    const out: Record<string, string> = { ...d };
+    if (!out["First Name"] && !out["Last Name"] && out["Name"]) {
+      const parts = out["Name"].trim().split(/\s+/);
+      out["First Name"] = parts.shift() || "";
+      out["Last Name"] = parts.join(" ");
+    }
+    if (!out["City"] && out["Location"]) {
+      const [city, state] = out["Location"].split(",").map((x) => x.trim());
+      out["City"] = city || "";
+      if (state && !out["State"]) out["State"] = state;
+    }
+    if (!out["Email"] && out["EmailAddress"]) out["Email"] = out["EmailAddress"];
+    return out;
+  };
+
   const buildRows = () =>
     Object.values(selected).map((r) => ({
       license_number: (r.row_data["License Number"] || `UP::${r.id}`).trim(),
-      row_data: r.row_data,
+      row_data: mapForPipeline(r.row_data),
     }));
 
   const savePipeline = async () => {
@@ -233,7 +250,7 @@ export default function MyDataPage() {
               <h2 className="font-semibold text-zinc-900">Upload a list</h2>
               <span className="text-xs text-zinc-500">{myRowCount.toLocaleString()} / {ROW_LIMIT.toLocaleString()} rows used</span>
             </div>
-            <p className="text-sm text-zinc-500">CSV or Excel with columns: {EXPECTED.join(", ")}.</p>
+            <p className="text-sm text-zinc-500">CSV or Excel with these columns: {EXPECTED.join(", ")}. (A serial-number / S.No column is ignored.)</p>
             <input type="file" accept=".csv,.xlsx,.xls" disabled={uploading}
               onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ""; }}
               className="block text-sm text-zinc-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-600 file:text-white hover:file:bg-blue-700 file:cursor-pointer" />
@@ -297,9 +314,10 @@ export default function MyDataPage() {
                       <tr>
                         <th className="px-4 py-3 w-10"></th>
                         <th className="text-left px-4 py-3 font-medium text-zinc-700">Name</th>
-                        <th className="text-left px-4 py-3 font-medium text-zinc-700">Business</th>
-                        <th className="text-left px-4 py-3 font-medium text-zinc-700">City</th>
-                        <th className="text-left px-4 py-3 font-medium text-zinc-700">License #</th>
+                        <th className="text-left px-4 py-3 font-medium text-zinc-700">Email</th>
+                        <th className="text-left px-4 py-3 font-medium text-zinc-700">Phone</th>
+                        <th className="text-left px-4 py-3 font-medium text-zinc-700">Location</th>
+                        <th className="text-left px-4 py-3 font-medium text-zinc-700">Status</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -311,10 +329,11 @@ export default function MyDataPage() {
                             <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                               <input type="checkbox" checked={isSel} onChange={() => toggleRow(r)} className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500" />
                             </td>
-                            <td className="px-4 py-3 text-zinc-900 whitespace-nowrap font-medium">{[d["First Name"], d["Last Name"]].filter(Boolean).join(" ") || "—"}</td>
-                            <td className="px-4 py-3 text-zinc-700">{d["Business Name"] || "—"}</td>
-                            <td className="px-4 py-3 text-zinc-700 whitespace-nowrap">{d["City"] || "—"}</td>
-                            <td className="px-4 py-3 text-zinc-700 font-mono text-xs whitespace-nowrap">{d["License Number"] || "—"}</td>
+                            <td className="px-4 py-3 text-zinc-900 whitespace-nowrap font-medium">{d["Name"] || "—"}</td>
+                            <td className="px-4 py-3 text-zinc-700 whitespace-nowrap">{d["EmailAddress"] || d["Email"] || "—"}</td>
+                            <td className="px-4 py-3 text-zinc-700 whitespace-nowrap">{d["Phone"] || "—"}</td>
+                            <td className="px-4 py-3 text-zinc-700 whitespace-nowrap">{d["Location"] || "—"}</td>
+                            <td className="px-4 py-3 text-zinc-700 whitespace-nowrap">{d["Status"] || "—"}</td>
                           </tr>
                         );
                       })}
