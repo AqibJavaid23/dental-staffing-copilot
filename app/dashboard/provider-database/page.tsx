@@ -181,6 +181,25 @@ export default function ProviderDatabasePage() {
   };
 
   const selectedCount = Object.keys(selected).length;
+
+  const DOWNLOAD_LIMIT = 300;
+  const downloadCSV = (list: Row[], filenameBase: string) => {
+    if (!list || list.length === 0) { alert("Nothing to download."); return; }
+    let out = list;
+    if (out.length > DOWNLOAD_LIMIT) {
+      if (!confirm(`You can download up to ${DOWNLOAD_LIMIT} rows at a time. This will download the first ${DOWNLOAD_LIMIT} of ${out.length.toLocaleString()}. Continue?`)) return;
+      out = out.slice(0, DOWNLOAD_LIMIT);
+    }
+    const data = out.map((r) => Object.fromEntries(cols.map((c) => [c, r[c] ?? ""])));
+    const csv = Papa.unparse(data, { columns: cols });
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${filenameBase}-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
   const isLoading = loading[activeTab];
   const activeChipCount = cityFilter.length + stateFilter.length;
   const hasAnyFilter = search || activeChipCount > 0;
@@ -262,8 +281,11 @@ if (checking) return <div className="min-h-screen flex items-center justify-cent
                 Clear all filters
               </button>
             )}
-            <div className="ml-auto text-sm text-zinc-500 dark:text-zinc-400">
-              {isLoading ? "Loading..." : `${filtered.length.toLocaleString()} result${filtered.length === 1 ? "" : "s"}`}
+            <div className="ml-auto flex items-center gap-3">
+              <button onClick={() => downloadCSV(filtered, `${activeTab.toLowerCase()}-providers`)} disabled={isLoading || filtered.length === 0} className="text-sm font-medium text-blue-600 hover:text-blue-800 disabled:opacity-40 transition">⬇ Download CSV{filtered.length > 0 ? ` (${Math.min(filtered.length, DOWNLOAD_LIMIT)})` : ""}</button>
+              <span className="text-sm text-zinc-500 dark:text-zinc-400">
+                {isLoading ? "Loading..." : `${filtered.length.toLocaleString()} result${filtered.length === 1 ? "" : "s"}`}
+              </span>
             </div>
           </div>
 
@@ -335,6 +357,7 @@ if (checking) return <div className="min-h-screen flex items-center justify-cent
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 rounded-full shadow-2xl px-6 py-3 flex items-center gap-4">
           <span className="text-sm font-medium">{selectedCount} selected</span>
           <button onClick={() => setSelected({})} className="text-sm text-zinc-300 dark:text-zinc-600 hover:text-white dark:hover:text-zinc-900 transition">Clear</button>
+          <button onClick={() => downloadCSV(Object.values(selected), `${activeTab.toLowerCase()}-selected`)} className="text-sm font-medium text-zinc-300 dark:text-zinc-600 hover:text-white dark:hover:text-zinc-900 transition">⬇ Download CSV</button>
           <button onClick={() => setShowSaveDialog(true)} className="text-sm font-medium bg-blue-600 text-white px-4 py-1.5 rounded-full hover:bg-blue-700 transition">
             Send to Pipeline →
           </button>
