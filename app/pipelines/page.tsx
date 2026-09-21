@@ -40,7 +40,7 @@ function PipelinesInner() {
   const [viewUserId, setViewUserId] = useState<string>("all");
 
   // Talent / Hiring type filter
-  const [typeFilter, setTypeFilter] = useState<"all" | "talent" | "hiring">("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "talent" | "hiring" | "mydata">("all");
 
   const { profile, checking } = useAuth();
 
@@ -140,7 +140,12 @@ function PipelinesInner() {
   const emptyLink = "/dashboard/provider-database";
   const emptyLabel = "Go to Provider Database";
 
-  const visiblePipelines = pipelines.filter((p) => typeFilter === "all" || typeOf(p) === typeFilter);
+  const isUpload = (p: Pipeline) => p.source_tab === "Upload";
+  const visiblePipelines = pipelines.filter((p) => {
+    if (typeFilter === "all") return true;
+    if (typeFilter === "mydata") return isUpload(p);
+    return !isUpload(p) && typeOf(p) === typeFilter;
+  });
 
 if (checking) return <div className="min-h-screen flex items-center justify-center bg-zinc-50"><BrandLoader label="Loading..." /></div>;
   return (
@@ -169,7 +174,7 @@ if (checking) return <div className="min-h-screen flex items-center justify-cent
         <div className="max-w-5xl mx-auto space-y-4">
           {/* Talent / Hiring filter */}
           <div className="flex gap-2">
-            {([["all", "All"], ["talent", "🦷 Talent"], ["hiring", "🏢 Hiring Practices"]] as const).map(([val, label]) => (
+            {([["all", "All"], ["talent", "🦷 Talent"], ["hiring", "🏢 Hiring Practices"], ["mydata", "📤 My Data"]] as const).map(([val, label]) => (
               <button
                 key={val}
                 onClick={() => setTypeFilter(val)}
