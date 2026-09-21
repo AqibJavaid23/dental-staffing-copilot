@@ -4,7 +4,7 @@ import { useEffect, useState, use, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/app/lib/supabase";
-import { enrichRow, smartSearchRescue, enrichRowNppes, checkRowInputQuality, findPerson, savePersonMatch, setSentFlag, findEmailByUrl, savePersonUrlEmail, type EnrichmentRecord, type PersonCandidate, type EmailResult , exportToHeyReachCsv , findContactsApify, findContactsHunter, saveCompanyContacts, type CompanyContact , loadCompanyContacts } from "@/app/lib/enrich";
+import { enrichRow, smartSearchRescue, enrichRowNppes, checkRowInputQuality, findPerson, savePersonMatch, setSentFlag, findEmailByUrl, savePersonUrlEmail, type EnrichmentRecord, type PersonCandidate, type EmailResult , exportPipelineCsv , findContactsApify, findContactsHunter, saveCompanyContacts, type CompanyContact , loadCompanyContacts } from "@/app/lib/enrich";
 import { useAuth } from "@/app/lib/useAuth";
 import BrandLoader from "@/app/components/BrandLoader";
 
@@ -442,8 +442,8 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
         <button onClick={() => sendToProspecting(rows)} className="px-3 py-1.5 text-xs font-medium bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition whitespace-nowrap" title="Send all rows to the Prospecting inbox">
           → Send all to Prospecting
         </button>
-        <button onClick={() => exportToHeyReachCsv(rows, enrichments, pipeline?.name || "pipeline")} className="px-3 py-1.5 text-xs font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition whitespace-nowrap" title="Export rows with a LinkedIn URL to a HeyReach-ready CSV">
-          ⬇ Export csv
+        <button onClick={() => exportPipelineCsv(rows, enrichments, pipeline?.name || "pipeline")} className="px-3 py-1.5 text-xs font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition whitespace-nowrap" title="Download every row with all its data and enrichment as a CSV">
+          ⬇ Download data
         </button>
       </header>
 
@@ -593,6 +593,21 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
                         {isExpanded && (
                           <tr className="bg-zinc-50/50">
                             <td colSpan={8} className="px-6 py-4">
+                              {/* All original fields from the row */}
+                              <div className="mb-5">
+                                <h4 className="font-semibold text-zinc-900 mb-2">All fields</h4>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-1 text-xs">
+                                  {Object.entries(r.row_data).filter(([, v]) => v && String(v).trim()).map(([k, v]) => (
+                                    <div key={k} className="min-w-0">
+                                      <span className="text-zinc-500">{k}: </span>
+                                      <span className="text-zinc-900 break-words">{v}</span>
+                                    </div>
+                                  ))}
+                                  {Object.values(r.row_data).filter((v) => v && String(v).trim()).length === 0 && (
+                                    <p className="text-zinc-400 italic">No stored fields for this row.</p>
+                                  )}
+                                </div>
+                              </div>
                               <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
                                {/* Person Contact — hybrid manual flow */}
                                 <div>

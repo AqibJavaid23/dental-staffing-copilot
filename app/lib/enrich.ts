@@ -915,6 +915,70 @@ export function exportToHeyReachCsv(
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+type ExpRow = { license_number: string; row_data: Record<string, string>; outreach_status?: string | null };
+
+// Full pipeline export: every row, original columns + whatever enrichment exists.
+export function exportPipelineCsv(
+  rows: ExpRow[],
+  enrichments: Record<string, EnrichmentRecord>,
+  pipelineName: string
+): void {
+  if (!rows || rows.length === 0) { alert("No rows to export."); return; }
+
+  // Original columns = union of all row_data keys, in first-seen order
+  const originalCols: string[] = [];
+  const seen = new Set<string>();
+  for (const r of rows) {
+    for (const k of Object.keys(r.row_data || {})) {
+      if (!seen.has(k)) { seen.add(k); originalCols.push(k); }
+    }
+  }
+
+  // Enrichment columns (clean labels) — included whether or not a row has them
+  const enrichCols: [string, (e: EnrichmentRecord | undefined, r: ExpRow) => string][] = [
+    ["Outreach Status", (_e, r) => r.outreach_status || "to_contact"],
+    ["Enrichment Status", (e) => e?.status || ""],
+    ["License Status", (e) => e?.npi_status || ""],
+    ["NPI Number", (e) => e?.npi_number || ""],
+    ["NPI Name", (e) => e?.npi_name || ""],
+    ["Specialty", (e) => e?.npi_specialty || ""],
+    ["Practice Address", (e) => e?.npi_address || ""],
+    ["NPI Phone", (e) => e?.npi_phone || ""],
+    ["Company Phone", (e) => e?.phone || ""],
+    ["Other Phones", (e) => (e?.extra_phones || []).join(" | ")],
+    ["Emails", (e) => (e?.emails || []).join(" | ")],
+    ["Website", (e) => e?.website || ""],
+    ["Google Maps", (e) => e?.google_maps_url || ""],
+    ["LinkedIn (person)", (e) => e?.person_linkedin_url || ""],
+    ["LinkedIn Email", (e) => e?.person_email || ""],
+    ["Headline", (e) => e?.person_headline || ""],
+    ["Facebook", (e) => (e?.facebooks || []).join(" | ")],
+    ["Instagram", (e) => (e?.instagrams || []).join(" | ")],
+  ];
+
+  const headers = [...originalCols, ...enrichCols.map(([h]) => h)];
+  const esc = (v: string) => {
+    const s = (v ?? "").toString();
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+
+  const lines: string[] = [headers.map(esc).join(",")];
+  for (const r of rows) {
+    const en = enrichments[(r.license_number || "").trim()];
+    const orig = originalCols.map((c) => esc(r.row_data?.[c] ?? ""));
+    const extra = enrichCols.map(([, fn2]) => esc(fn2(en, r)));
+    lines.push([...orig, ...extra].join(","));
+  }
+
+  const csv = "\ufeff" + lines.join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${pipelineName.replace(/[^a-z0-9]+/gi, "_")}_data.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 // ---------- Find company contacts by domain (Apify + Hunter) ----------
 const EMAIL_DOMAIN_ACTOR = process.env.NEXT_PUBLIC_APIFY_EMAIL_DOMAIN_ACTOR || "burbn~email-search-api";
 
