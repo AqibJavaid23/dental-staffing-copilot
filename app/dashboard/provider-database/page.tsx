@@ -84,6 +84,7 @@ export default function ProviderDatabasePage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabLabel>("Dentist");
   const [data, setData] = useState<Record<TabLabel, Row[]>>({ Dentist: [], Hygienist: [] });
+    const [columns, setColumns] = useState<Record<TabLabel, string[]>>({ Dentist: [], Hygienist: [] });
   const [loading, setLoading] = useState<Record<TabLabel, boolean>>({ Dentist: true, Hygienist: true });
   const [error, setError] = useState<string | null>(null);
 
@@ -110,6 +111,7 @@ export default function ProviderDatabasePage() {
         const csv = await res.text();
         const parsed = Papa.parse<Row>(csv, { header: true, skipEmptyLines: true });
         setData((prev) => ({ ...prev, [label]: parsed.data }));
+        setColumns((prev) => ({ ...prev, [label]: parsed.meta.fields || [] }));
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to load data");
       } finally {
@@ -126,6 +128,8 @@ export default function ProviderDatabasePage() {
   useEffect(() => { setPage(1); }, [search, cityFilter, stateFilter, activeTab]);
 
   const rows = data[activeTab];
+  const HIDDEN_COLS = ["Processed"];
+  const cols = columns[activeTab].filter((c) => !HIDDEN_COLS.includes(c));
 
   const uniqueCities = useMemo(() => Array.from(new Set(rows.map((r) => r["City"]).filter(Boolean))).sort(), [rows]);
   const uniqueStates = useMemo(() => Array.from(new Set(rows.map((r) => r["State"]).filter(Boolean))).sort(), [rows]);
@@ -136,7 +140,7 @@ export default function ProviderDatabasePage() {
       if (cityFilter.length > 0 && !cityFilter.includes(r["City"])) return false;
       if (stateFilter.length > 0 && !stateFilter.includes(r["State"])) return false;
       if (s) {
-        const hay = `${r["First Name"] ?? ""} ${r["Middle Name"] ?? ""} ${r["Last Name"] ?? ""} ${r["Business Name"] ?? ""} ${r["City"] ?? ""} ${r["License Number"] ?? ""}`.toLowerCase();
+        const hay = Object.values(r).join(" ").toLowerCase();
         if (!hay.includes(s)) return false;
       }
       return true;
@@ -292,13 +296,9 @@ if (checking) return <div className="min-h-screen flex items-center justify-cent
                       <th className="px-4 py-3 w-10">
                         <input type="checkbox" checked={allOnPageSelected} onChange={toggleAllOnPage} className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500" />
                       </th>
-                      <th className="text-left px-4 py-3 font-medium text-zinc-700 dark:text-zinc-300">Name</th>
-                      <th className="text-left px-4 py-3 font-medium text-zinc-700 dark:text-zinc-300">Business</th>
-                      <th className="text-left px-4 py-3 font-medium text-zinc-700 dark:text-zinc-300">City</th>
-                      <th className="text-left px-4 py-3 font-medium text-zinc-700 dark:text-zinc-300">State</th>
-                      <th className="text-left px-4 py-3 font-medium text-zinc-700 dark:text-zinc-300">Telephone</th>
-                      <th className="text-left px-4 py-3 font-medium text-zinc-700 dark:text-zinc-300">License #</th>
-                      <th className="text-left px-4 py-3 font-medium text-zinc-700 dark:text-zinc-300">Expires</th>
+                      {cols.map((c) => (
+                        <th key={c} className="text-left px-4 py-3 font-medium text-zinc-700 dark:text-zinc-300 whitespace-nowrap">{c}</th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
@@ -307,16 +307,9 @@ if (checking) return <div className="min-h-screen flex items-center justify-cent
                         <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                           <input type="checkbox" checked={isRowSelected(r)} onChange={() => toggleRow(r)} className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500" />
                         </td>
-                        <td className="px-4 py-3 text-zinc-900 dark:text-zinc-100 whitespace-nowrap">
-                          {[r["First Name"], r["Middle Name"], r["Last Name"]].filter(Boolean).join(" ")}
-                          {r["Degree"] && <span className="text-zinc-400 ml-1">, {r["Degree"]}</span>}
-                        </td>
-                        <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">{r["Business Name"] || "—"}</td>
-                        <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300 whitespace-nowrap">{r["City"] || "—"}</td>
-                        <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">{r["State"] || "—"}</td>
-                        <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300 whitespace-nowrap">{r["Telephone"] || "—"}</td>
-                        <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300 whitespace-nowrap font-mono text-xs">{r["License Number"] || "—"}</td>
-                        <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300 whitespace-nowrap">{r["License Expiration Date"] || "—"}</td>
+                        {cols.map((c) => (
+                          <td key={c} className="px-4 py-3 text-zinc-700 dark:text-zinc-300 whitespace-nowrap">{r[c] || "—"}</td>
+                        ))}
                       </tr>
                     ))}
                   </tbody>
