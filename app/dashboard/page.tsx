@@ -9,12 +9,6 @@ import MyWeek from "@/app/components/MyWeek";
 import NotificationBell from "@/app/components/NotificationBell";
 import TaskPanel from "@/app/components/TaskPanel";
 import AssignedTasks from "@/app/components/AssignedTasks";
-function greeting() {
-  const h = new Date().getHours();
-  if (h < 12) return "Good morning ☀️";
-  if (h < 18) return "Good afternoon 🌤️";
-  return "Good evening 🌙";
-}
 
 const CARDS = [
   { href: "/dashboard/provider-database", icon: "🦷", title: "Provider Database", desc: "Browse dentists & hygienists, filter by location, and select providers for outreach.", accent: "#0080D0" },
@@ -27,8 +21,6 @@ const CARDS = [
   { href: "/dashboard/reports", icon: "📋", title: "Reports & Tasks", desc: "Submit your weekly plan, get it approved as a checklist, and track your tasks.", accent: "#8b5cf6" },
   { href: "/dashboard/groups", icon: "👥", title: "Groups", desc: "Create and manage your teams (departments) and see who reports to whom.", accent: "#6366f1" },
 ];
-
-const ROLE_LABEL: Record<string, string> = { admin: "Admin", manager: "Manager", member: "Member" };
 
 export default function Dashboard() {
   const router = useRouter();
@@ -67,27 +59,10 @@ export default function Dashboard() {
 
   if (checking) return <div className="min-h-screen flex items-center justify-center bg-zinc-50"><BrandLoader label="Loading..." /></div>;
 
-  const displayName = profile?.full_name?.trim() || profile?.email?.split("@")[0] || "there";
-
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50">
       <main className="flex-1 px-6 py-8">
         <div className="max-w-7xl mx-auto">
-          {/* Welcome header */}
-          <div className="mb-8 animate-slide-in-left">
-            <div className="flex items-center gap-3 flex-wrap">
-              <h2 className="text-3xl font-semibold" style={{ color: "var(--deep-navy)" }}>
-                {greeting()}, {displayName}
-              </h2>
-              {profile?.role && (
-                <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ backgroundColor: "rgba(18, 59, 120, 0.08)", color: "var(--brand-navy)" }}>
-                  {ROLE_LABEL[profile.role] || profile.role}
-                </span>
-              )}
-            </div>
-            <p className="text-zinc-500 mt-2">Find providers, build pipelines, and run your outreach — all in one place.</p>
-          </div>
-
           {/* Two-column workspace: tasks left, cards right */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* LEFT — task panel */}

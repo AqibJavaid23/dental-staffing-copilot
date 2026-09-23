@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Montserrat } from "next/font/google";
 import "./globals.css";
-import NavBar from "@/app/components/NavBar";
+import AppShell from "@/app/components/AppShell";
 import AiAssistant from "@/app/components/AiAssistant";
 const montserrat = Montserrat({
   subsets: ["latin"],
@@ -20,9 +20,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full antialiased">
-           <body className={`${montserrat.className} min-h-full flex flex-col`}>
-        <NavBar />
-        {children}
+      <body className={`${montserrat.className} min-h-full`}>
+        <AppShell>{children}</AppShell>
         <AiAssistant />
       </body>
     </html>
