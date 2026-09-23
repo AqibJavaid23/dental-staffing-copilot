@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/app/lib/useAuth";
 import Sidebar from "@/app/components/Sidebar";
 import NotificationBell from "@/app/components/NotificationBell";
-
+import Clock from "@/app/components/Clock";
 const HIDDEN_ON = ["/", "/set-password", "/reset-password", "/choose"];
 
 const SECTIONS: [string, string, boolean?][] = [
@@ -107,6 +107,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <h1 className="text-base font-semibold text-zinc-900 truncate">{title}</h1>
           ) : null}
           <div className="flex-1" />
+          <Clock />
           <NotificationBell userId={profile.id} />
         </div>
 
