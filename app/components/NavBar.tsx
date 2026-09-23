@@ -16,7 +16,7 @@ const NAV_LINKS = [
   { href: "/dashboard/groups", label: "Groups" },
 ];
 
-const HIDDEN_ON = ["/", "/set-password", "/choose"];
+const HIDDEN_ON = ["/", "/set-password", "/reset-password", "/choose"];
 
 export default function NavBar() {
   const pathname = usePathname();
