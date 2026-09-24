@@ -30,7 +30,7 @@ export default function Home() {
     }
     setSplash(true);
     router.prefetch("/choose");
-    setTimeout(() => router.push("/choose"), 1500);
+    setTimeout(() => router.push("/choose"), 3000);
   };
 
   const handleReset = async (e: React.FormEvent) => {
@@ -121,8 +121,12 @@ export default function Home() {
 
       {splash && (
         <div className="splash-overlay">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/logo-color-navy.png" alt="Dental Staffing Co-Pilot" />
+          <div className="splash-logo">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className="splash-logo-color" src="/brand/logo-color-transparent.png" alt="Dental Staffing Co-Pilot" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className="splash-logo-white" src="/brand/logo-white.png" alt="" aria-hidden="true" />
+          </div>
           <div className="splash-progress" />
           <p className="splash-text">Preparing your workspace…</p>
         </div>
