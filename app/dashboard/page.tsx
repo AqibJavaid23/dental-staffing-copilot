@@ -9,7 +9,7 @@ import MyWeek from "@/app/components/MyWeek";
 import NotificationBell from "@/app/components/NotificationBell";
 import TaskPanel from "@/app/components/TaskPanel";
 import AssignedTasks from "@/app/components/AssignedTasks";
-import { Database, Target, Upload, Search, GitBranch, Briefcase, Handshake, ClipboardList, Users, Megaphone, ArrowRight } from "lucide-react";
+import { Database, Target, Upload, Search, GitBranch, Briefcase, Waypoints, ClipboardList, Users, Megaphone, ArrowRight } from "lucide-react";
 
 const CARDS = [
   { href: "/dashboard/provider-database", Icon: Database, title: "Provider Database", desc: "Browse dentists & hygienists, filter by location, and select providers for outreach.", from: "#0080D0", to: "#123B78" },
@@ -18,7 +18,7 @@ const CARDS = [
   { href: "/dashboard/lookup", Icon: Search, title: "Provider Lookup", desc: "Find any provider by NPI, name, or city, then send them to a pipeline.", from: "#38bdf8", to: "#0080D0" },
   { href: "/pipelines", Icon: GitBranch, title: "Pipelines", desc: "Manage recruiting pipelines — enrichment, outreach status, and activity history.", from: "#123B78", to: "#0b2a5a" },
   { href: "/dashboard/jobs", Icon: Briefcase, title: "Job Postings", desc: "Find dental job postings (hiring practices) on LinkedIn and more.", from: "#0080D0", to: "#0369a1" },
-  { href: "/dashboard/pools", Icon: Handshake, title: "Talent Pools", desc: "Match your talent to hiring practices and manage who to pitch where.", from: "#2f6fed", to: "#123B78" },
+  { href: "/dashboard/pools", Icon: Waypoints, title: "Talent Pools", desc: "Match your talent to hiring practices and manage who to pitch where.", from: "#2f6fed", to: "#123B78" },
   { href: "/dashboard/reports", Icon: ClipboardList, title: "Reports & Tasks", desc: "Submit your weekly plan, get it approved as a checklist, and track your tasks.", from: "#3b82f6", to: "#1e3a8a" },
   { href: "/dashboard/groups", Icon: Users, title: "Groups", desc: "Create and manage your teams (departments) and see who reports to whom.", from: "#0891b2", to: "#123B78" },
 ];

@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "@/app/lib/useAuth";
 import {
   LayoutDashboard, Stethoscope, Target, Upload, Search, GitBranch, Briefcase,
-  Handshake, ClipboardList, Users, Megaphone, MessageSquare, Mail, Workflow,
+  Waypoints, ClipboardList, Users, Megaphone, MessageSquare, Mail, Workflow,
   ArrowLeftRight, UserCog, LogOut, ChevronRight, ChevronDown,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -21,7 +21,7 @@ const NAV: { href: string; label: string; Icon: LucideIcon; exact?: boolean }[] 
   { href: "/dashboard/lookup", label: "Provider Lookup", Icon: Search },
   { href: "/pipelines", label: "Enrichment Pipelines", Icon: GitBranch },
   { href: "/dashboard/jobs", label: "Jobs", Icon: Briefcase },
-  { href: "/dashboard/pools", label: "Pools", Icon: Handshake },
+  { href: "/dashboard/pools", label: "Pools", Icon: Waypoints },
   { href: "/dashboard/reports", label: "Reports", Icon: ClipboardList },
   { href: "/dashboard/groups", label: "Groups", Icon: Users },
 ];
