@@ -126,6 +126,7 @@ export default function Home() {
             <img className="splash-logo-color" src="/brand/logo-color-transparent.png" alt="Dental Staffing Co-Pilot" />
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img className="splash-logo-white" src="/brand/logo-white.png" alt="" aria-hidden="true" />
+            <span className="splash-shine" aria-hidden="true" />
           </div>
           <div className="splash-progress" />
           <p className="splash-text">Preparing your workspace…</p>

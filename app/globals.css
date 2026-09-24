@@ -135,6 +135,30 @@ a {
   45% { opacity: 1; }
   100% { opacity: 0; }
 }
+.splash-shine {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 42%, rgba(255,255,255,0.9) 50%, transparent 58%);
+  background-size: 250% 100%;
+  background-position: -150% 0;
+  opacity: 0;
+  -webkit-mask-image: url(/brand/logo-white.png);
+  mask-image: url(/brand/logo-white.png);
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  animation: splash-shine 0.85s ease-in-out 2s both;
+}
+@keyframes splash-shine {
+  0% { background-position: -150% 0; opacity: 0; }
+  15% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { background-position: 250% 0; opacity: 0; }
+}
 .splash-progress {
   width: 220px;
   height: 3px;
