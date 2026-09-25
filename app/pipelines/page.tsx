@@ -7,6 +7,10 @@ import { supabase } from "@/app/lib/supabase";
 import BrandLoader from "@/app/components/BrandLoader";
 import { useAuth } from "@/app/lib/useAuth";
 type Pipeline = {
+  shared?: boolean;
+  owner_id?: string | null;
+  sharedByName?: string | null;
+  sharedWithNames?: string[];
   id: string;
   name: string;
   source_tab: string;
@@ -40,7 +44,7 @@ function PipelinesInner() {
   const [viewUserId, setViewUserId] = useState<string>("all");
 
   // Talent / Hiring type filter
-  const [typeFilter, setTypeFilter] = useState<"all" | "talent" | "hiring" | "mydata">("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "talent" | "hiring" | "mydata" | "shared">("all");
 
   const { profile, checking } = useAuth();
 
@@ -73,13 +77,57 @@ function PipelinesInner() {
       const { data: pipes, error: pErr } = await query;
       if (pErr) throw pErr;
 
+      // Include pipelines shared with me (any role)
+      const { data: myShareRows } = await supabase.from("pipeline_shares").select("pipeline_id").eq("user_id", profile.id);
+      const sharedIdList = (myShareRows ?? []).map((x) => x.pipeline_id as string);
+      const sharedSet = new Set(sharedIdList);
+      const ownIds = new Set((pipes ?? []).map((p) => p.id));
+      const missingSharedIds = sharedIdList.filter((pid) => !ownIds.has(pid));
+      let sharedPipes: NonNullable<typeof pipes> = [];
+      if (missingSharedIds.length > 0) {
+        let sq = supabase.from("pipelines").select("*").in("id", missingSharedIds);
+        if (projectFilter) sq = sq.eq("project", projectFilter);
+        const { data: sp } = await sq;
+        sharedPipes = sp ?? [];
+      }
+      const allPipes = [...(pipes ?? []), ...sharedPipes];
+
+      // Who shared each one with me + who I shared each one with
+      const allIds = allPipes.map((p) => p.id);
+      const shareInfo: Record<string, { byName?: string | null; withNames: string[] }> = {};
+      if (allIds.length > 0) {
+        const { data: allShares } = await supabase.from("pipeline_shares").select("pipeline_id, user_id, shared_by").in("pipeline_id", allIds);
+        const uids = new Set<string>();
+        (allShares ?? []).forEach((sh) => { if (sh.user_id) uids.add(sh.user_id); if (sh.shared_by) uids.add(sh.shared_by); });
+        const nameMap: Record<string, string> = {};
+        if (uids.size > 0) {
+          const { data: profs } = await supabase.from("profiles").select("id, full_name, email").in("id", [...uids]);
+          (profs ?? []).forEach((u) => { nameMap[u.id] = u.full_name || u.email || "Someone"; });
+        }
+        (allShares ?? []).forEach((sh) => {
+          const info = shareInfo[sh.pipeline_id] || { withNames: [] };
+          if (sh.user_id === profile.id) info.byName = sh.shared_by ? (nameMap[sh.shared_by] || "Someone") : "Someone";
+          const owner = allPipes.find((x) => x.id === sh.pipeline_id);
+          if (owner && owner.owner_id === profile.id) {
+            const nm = nameMap[sh.user_id] || "Someone";
+            if (!info.withNames.includes(nm)) info.withNames.push(nm);
+          }
+          shareInfo[sh.pipeline_id] = info;
+        });
+      }
+
       const withStats: Pipeline[] = await Promise.all(
-        (pipes ?? []).map(async (p) => {
+        allPipes.map(async (p) => {
           const [{ count: total }, { count: enriched }] = await Promise.all([
             supabase.from("pipeline_rows").select("*", { count: "exact", head: true }).eq("pipeline_id", p.id),
             supabase.from("pipeline_rows").select("*", { count: "exact", head: true }).eq("pipeline_id", p.id).in("enrichment_status", ["enriched", "partial"]),
           ]);
-          return { ...p, total: total ?? 0, enriched: enriched ?? 0 };
+          return {
+            ...p, total: total ?? 0, enriched: enriched ?? 0,
+            shared: sharedSet.has(p.id),
+            sharedByName: shareInfo[p.id]?.byName ?? null,
+            sharedWithNames: shareInfo[p.id]?.withNames ?? [],
+          };
         })
       );
       setPipelines(withStats);
@@ -144,6 +192,7 @@ function PipelinesInner() {
   const visiblePipelines = pipelines.filter((p) => {
     if (typeFilter === "all") return true;
     if (typeFilter === "mydata") return isUpload(p);
+    if (typeFilter === "shared") return !!p.sharedByName || (p.sharedWithNames?.length ?? 0) > 0;
     return !isUpload(p) && typeOf(p) === typeFilter;
   });
 
@@ -174,7 +223,7 @@ if (checking) return <div className="min-h-screen flex items-center justify-cent
         <div className="max-w-5xl mx-auto space-y-4">
           {/* Talent / Hiring filter */}
           <div className="flex gap-2">
-            {([["all", "All"], ["talent", "🦷 Talent"], ["hiring", "🏢 Hiring Practices"], ["mydata", "📤 My Data"]] as const).map(([val, label]) => (
+            {([["all", "All"], ["talent", "🦷 Talent"], ["hiring", "🏢 Hiring Practices"], ["mydata", "📤 My Data"], ["shared", "🔗 Shared"]] as const).map(([val, label]) => (
               <button
                 key={val}
                 onClick={() => setTypeFilter(val)}
@@ -215,6 +264,8 @@ if (checking) return <div className="min-h-screen flex items-center justify-cent
                             {ptype === "hiring" ? "🏢 Hiring" : "🦷 Talent"}
                           </span>
                           <span className="text-xs text-zinc-500 dark:text-zinc-400">{p.source_tab}s</span>
+                          {p.sharedByName && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">Shared by {p.sharedByName}</span>}
+                          {p.sharedWithNames && p.sharedWithNames.length > 0 && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700" title={p.sharedWithNames.join(", ")}>Shared with {p.sharedWithNames.length}</span>}
                         </div>
                         <h3 className="font-semibold text-zinc-900 dark:text-zinc-50 truncate hover:text-blue-600 dark:hover:text-blue-400 transition">{p.name}</h3>
                         <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{new Date(p.created_at).toLocaleDateString()}</p>

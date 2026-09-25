@@ -17,7 +17,8 @@ type PipelineRow = {
   outreach_notes: string | null;
 };
 
-type Pipeline = { id: string; name: string; source_tab: string; project: string; created_at: string; pipeline_type?: string | null };
+type Pipeline = { id: string; name: string; source_tab: string; project: string; created_at: string; pipeline_type?: string | null; owner_id?: string | null };
+type SharePerson = { id: string; full_name: string | null; email: string; role: string };
 
 type LogEntry = {
   id: string;
@@ -57,7 +58,7 @@ function formatLogDate(iso: string) {
 export default function PipelineDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const { checking } = useAuth();
+  const { profile, checking } = useAuth();
   const [pipeline, setPipeline] = useState<Pipeline | null>(null);
   const [rows, setRows] = useState<PipelineRow[]>([]);
   const [enrichments, setEnrichments] = useState<Record<string, EnrichmentRecord>>({});
@@ -86,6 +87,9 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
   const [bulkDialog, setBulkDialog] = useState<{ newStatus: string | null } | null>(null);
   const [bulkNote, setBulkNote] = useState("");
   const [savingBulk, setSavingBulk] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [sharedIds, setSharedIds] = useState<Set<string>>(new Set());
+  const [sharePeople, setSharePeople] = useState<SharePerson[]>([]);
 
   const load = async () => {
     setLoading(true); setError(null);
@@ -132,6 +136,11 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
         });
         setLogs(logMap);
       }
+
+      const { data: shr } = await supabase.from("pipeline_shares").select("user_id").eq("pipeline_id", id);
+      setSharedIds(new Set((shr ?? []).map((x) => x.user_id as string)));
+      const { data: profs } = await supabase.from("profiles").select("id, full_name, email, role");
+      setSharePeople((profs ?? []) as SharePerson[]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load pipeline");
     } finally { setLoading(false); }
@@ -240,6 +249,18 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
       alert("Failed: " + (e instanceof Error ? e.message : "unknown"));
     } finally { setSavingBulk(false); }
   };
+
+  const toggleShare = async (userId: string) => {
+    if (sharedIds.has(userId)) {
+      await supabase.from("pipeline_shares").delete().eq("pipeline_id", id).eq("user_id", userId);
+      setSharedIds((prev) => { const n = new Set(prev); n.delete(userId); return n; });
+    } else {
+      await supabase.from("pipeline_shares").insert({ pipeline_id: id, user_id: userId, shared_by: profile?.id || null });
+      setSharedIds((prev) => { const n = new Set(prev); n.add(userId); return n; });
+    }
+  };
+
+  const canShare = !!profile && !!pipeline && (pipeline.owner_id === profile.id || profile.role === "manager" || profile.role === "admin");
 
   const enrichableData = (row: PipelineRow) => ({ ...row.row_data, "License Number": row.license_number });
 
@@ -483,6 +504,11 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
           )}
           <h1 className="text-lg font-semibold text-zinc-900 truncate">{pipeline?.name ?? "Pipeline"}</h1>
         </div>
+        {canShare && (
+          <button onClick={() => setShareOpen(true)} className="px-3 py-1.5 text-xs font-medium bg-zinc-100 text-zinc-700 rounded-lg hover:bg-zinc-200 transition whitespace-nowrap" title="Share this pipeline with teammates">
+            Share{sharedIds.size > 0 ? ` (${sharedIds.size})` : ""}
+          </button>
+        )}
         <button onClick={() => sendToProspecting(rows)} className="px-3 py-1.5 text-xs font-medium bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 border border-blue-100 transition whitespace-nowrap" title="Send all rows to the Prospecting inbox">
           → Send all to Prospecting
         </button>
@@ -828,6 +854,35 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
           )}
         </div>
       </main>
+
+      {shareOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShareOpen(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-zinc-900">Share &quot;{pipeline?.name}&quot;</h2>
+              <button onClick={() => setShareOpen(false)} className="text-zinc-400 hover:text-zinc-900">✕</button>
+            </div>
+            <p className="text-sm text-zinc-500">Tick a teammate to give them full access — they can add logs, change status, and enrich alongside you. Changes save instantly.</p>
+            <div className="max-h-72 overflow-y-auto divide-y divide-zinc-100 border border-zinc-200 rounded-lg">
+              {sharePeople.filter((p) => p.id !== pipeline?.owner_id && p.id !== profile?.id).map((p) => (
+                <label key={p.id} className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-zinc-50">
+                  <input type="checkbox" checked={sharedIds.has(p.id)} onChange={() => toggleShare(p.id)} className="h-4 w-4 rounded border-zinc-300 text-blue-600" />
+                  <span className="min-w-0">
+                    <span className="block text-sm text-zinc-800 truncate">{p.full_name || p.email}</span>
+                    <span className="block text-[11px] text-zinc-400 capitalize">{p.role}</span>
+                  </span>
+                </label>
+              ))}
+              {sharePeople.filter((p) => p.id !== pipeline?.owner_id && p.id !== profile?.id).length === 0 && (
+                <p className="px-3 py-3 text-sm text-zinc-400 italic">No other teammates to share with.</p>
+              )}
+            </div>
+            <div className="flex justify-end pt-1">
+              <button onClick={() => setShareOpen(false)} className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">Done</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {selectedCount > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-zinc-900 text-white rounded-full shadow-2xl px-5 py-3 flex items-center gap-3 flex-wrap justify-center">
