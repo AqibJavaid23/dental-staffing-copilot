@@ -19,6 +19,8 @@ type PipelineRow = {
 
 type Pipeline = { id: string; name: string; source_tab: string; project: string; created_at: string; pipeline_type?: string | null; owner_id?: string | null };
 type SharePerson = { id: string; full_name: string | null; email: string; role: string };
+const ADD_FIELDS = ["First Name", "Last Name", "Business Name", "City", "State", "Phone", "Email", "License Number"];
+const emptyPipeRow = (): Record<string, string> => ({ "First Name": "", "Last Name": "", "Business Name": "", City: "", State: "", Phone: "", Email: "", "License Number": "" });
 
 type LogEntry = {
   id: string;
@@ -90,6 +92,11 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
   const [shareOpen, setShareOpen] = useState(false);
   const [sharedIds, setSharedIds] = useState<Set<string>>(new Set());
   const [sharePeople, setSharePeople] = useState<SharePerson[]>([]);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addMode, setAddMode] = useState<"form" | "paste">("form");
+  const [formRows, setFormRows] = useState<Record<string, string>[]>([emptyPipeRow()]);
+  const [pasteText, setPasteText] = useState("");
+  const [savingAdd, setSavingAdd] = useState(false);
 
   const load = async () => {
     setLoading(true); setError(null);
@@ -248,6 +255,47 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
     } catch (e) {
       alert("Failed: " + (e instanceof Error ? e.message : "unknown"));
     } finally { setSavingBulk(false); }
+  };
+
+  const buildAddRows = (): { license_number: string; row_data: Record<string, string> }[] => {
+    if (addMode === "form") {
+      return formRows
+        .filter((r) => Object.values(r).some((v) => v.trim()))
+        .map((r) => {
+          const rd = { ...r };
+          const lic = (rd["License Number"] || "").trim();
+          delete rd["License Number"];
+          return { license_number: lic || `MANUAL::${crypto.randomUUID()}`, row_data: rd };
+        });
+    }
+    return pasteText
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const parts = line.includes("\t") ? line.split("\t") : line.split(",");
+        const rd: Record<string, string> = {};
+        ADD_FIELDS.forEach((c, i) => { rd[c] = (parts[i] || "").trim(); });
+        const lic = (rd["License Number"] || "").trim();
+        delete rd["License Number"];
+        return { license_number: lic || `MANUAL::${crypto.randomUUID()}`, row_data: rd };
+      })
+      .filter((r) => Object.values(r.row_data).some((v) => v));
+  };
+
+  const saveAdd = async () => {
+    const newRows = buildAddRows();
+    if (newRows.length === 0) { alert("Add at least one row with some data."); return; }
+    setSavingAdd(true);
+    try {
+      const toInsert = newRows.map((r) => ({ pipeline_id: id, license_number: r.license_number, row_data: r.row_data }));
+      const { error } = await supabase.from("pipeline_rows").insert(toInsert);
+      if (error) throw error;
+      setAddOpen(false); setFormRows([emptyPipeRow()]); setPasteText(""); setAddMode("form");
+      load();
+    } catch (e) {
+      alert("Failed: " + (e instanceof Error ? e.message : "unknown"));
+    } finally { setSavingAdd(false); }
   };
 
   const toggleShare = async (userId: string) => {
@@ -504,6 +552,9 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
           )}
           <h1 className="text-lg font-semibold text-zinc-900 truncate">{pipeline?.name ?? "Pipeline"}</h1>
         </div>
+        <button onClick={() => setAddOpen(true)} className="px-3 py-1.5 text-xs font-medium bg-zinc-100 text-zinc-700 rounded-lg hover:bg-zinc-200 transition whitespace-nowrap" title="Add rows to this pipeline">
+          + Add rows
+        </button>
         {canShare && (
           <button onClick={() => setShareOpen(true)} className="px-3 py-1.5 text-xs font-medium bg-zinc-100 text-zinc-700 rounded-lg hover:bg-zinc-200 transition whitespace-nowrap" title="Share this pipeline with teammates">
             Share{sharedIds.size > 0 ? ` (${sharedIds.size})` : ""}
@@ -854,6 +905,47 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
           )}
         </div>
       </main>
+
+      {addOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => !savingAdd && setAddOpen(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 space-y-4 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-zinc-900">Add rows to this pipeline</h2>
+              <button onClick={() => setAddOpen(false)} className="text-zinc-400 hover:text-zinc-900">✕</button>
+            </div>
+            <div className="inline-flex rounded-lg border border-zinc-200 p-0.5 text-sm">
+              <button onClick={() => setAddMode("form")} className={`px-3 py-1 rounded-md ${addMode === "form" ? "bg-blue-600 text-white" : "text-zinc-600"}`}>Type a row</button>
+              <button onClick={() => setAddMode("paste")} className={`px-3 py-1 rounded-md ${addMode === "paste" ? "bg-blue-600 text-white" : "text-zinc-600"}`}>Paste many</button>
+            </div>
+
+            {addMode === "form" ? (
+              <div className="space-y-2">
+                {formRows.map((row, i) => (
+                  <div key={i} className="grid grid-cols-2 sm:grid-cols-4 gap-2 border border-zinc-200 rounded-lg p-2 relative">
+                    {ADD_FIELDS.map((f) => (
+                      <input key={f} value={row[f] || ""} onChange={(e) => setFormRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, [f]: e.target.value } : r)))} placeholder={f} className="px-2 py-1.5 border border-zinc-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    ))}
+                    {formRows.length > 1 && (
+                      <button onClick={() => setFormRows((prev) => prev.filter((_, idx) => idx !== i))} className="absolute -top-2 -right-2 w-5 h-5 text-[11px] bg-white border border-zinc-300 rounded-full text-zinc-400 hover:text-red-500" title="Remove row">✕</button>
+                    )}
+                  </div>
+                ))}
+                <button onClick={() => setFormRows((prev) => [...prev, emptyPipeRow()])} className="text-sm font-medium text-blue-600 hover:text-blue-800">+ Add another row</button>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <textarea value={pasteText} onChange={(e) => setPasteText(e.target.value)} rows={8} placeholder="One row per line…" className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <p className="text-[11px] text-zinc-400">One row per line. Columns in this order (tab or comma separated): First Name, Last Name, Business Name, City, State, Phone, Email, License #. Copy cells straight from Excel/Sheets — tabs are handled.</p>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-zinc-100">
+              <button onClick={() => setAddOpen(false)} disabled={savingAdd} className="px-4 py-2 text-sm text-zinc-600 hover:text-zinc-900 transition disabled:opacity-40">Cancel</button>
+              <button onClick={saveAdd} disabled={savingAdd} className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-40">{savingAdd ? "Adding…" : "Add to pipeline"}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {shareOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShareOpen(false)}>
