@@ -83,6 +83,9 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
   const [logNote, setLogNote] = useState("");
   const [savingLog, setSavingLog] = useState(false);
   const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({});
+  const [bulkDialog, setBulkDialog] = useState<{ newStatus: string | null } | null>(null);
+  const [bulkNote, setBulkNote] = useState("");
+  const [savingBulk, setSavingBulk] = useState(false);
 
   const load = async () => {
     setLoading(true); setError(null);
@@ -195,6 +198,47 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
     } catch (e) {
       alert("Failed to save: " + (e instanceof Error ? e.message : "unknown"));
     } finally { setSavingLog(false); }
+  };
+
+  // --- Bulk selection + actions ---
+  const selectedIds = Object.keys(selectedRows).filter((id) => selectedRows[id]);
+  const selectedCount = selectedIds.length;
+  const toggleRowSel = (id: string) => setSelectedRows((prev) => ({ ...prev, [id]: !prev[id] }));
+  const allSelected = rows.length > 0 && rows.every((r) => selectedRows[r.id]);
+  const toggleAllSel = () => {
+    if (allSelected) { setSelectedRows({}); return; }
+    const m: Record<string, boolean> = {};
+    rows.forEach((r) => { m[r.id] = true; });
+    setSelectedRows(m);
+  };
+
+  const saveBulk = async () => {
+    if (!bulkDialog) return;
+    const ids = selectedIds;
+    if (ids.length === 0) { setBulkDialog(null); return; }
+    const note = bulkNote.trim() || null;
+    const newStatus = bulkDialog.newStatus;
+    if (!newStatus && !note) { setBulkDialog(null); return; }
+    setSavingBulk(true);
+    try {
+      const logRows = ids.map((id) => ({ pipeline_row_id: id, status: newStatus, note }));
+      const { error: lErr } = await supabase.from("outreach_log").insert(logRows);
+      if (lErr) throw lErr;
+      if (newStatus) {
+        const { error: uErr } = await supabase
+          .from("pipeline_rows")
+          .update({ outreach_status: newStatus, outreach_updated_at: new Date().toISOString() })
+          .in("id", ids);
+        if (uErr) throw uErr;
+        setRows((prev) => prev.map((r) => (ids.includes(r.id) ? { ...r, outreach_status: newStatus } : r)));
+      }
+      for (const id of ids) await refreshLogsFor(id);
+      setBulkDialog(null);
+      setBulkNote("");
+      setSelectedRows({});
+    } catch (e) {
+      alert("Failed: " + (e instanceof Error ? e.message : "unknown"));
+    } finally { setSavingBulk(false); }
   };
 
   const enrichableData = (row: PipelineRow) => ({ ...row.row_data, "License Number": row.license_number });
@@ -439,10 +483,10 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
           )}
           <h1 className="text-lg font-semibold text-zinc-900 truncate">{pipeline?.name ?? "Pipeline"}</h1>
         </div>
-        <button onClick={() => sendToProspecting(rows)} className="px-3 py-1.5 text-xs font-medium bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition whitespace-nowrap" title="Send all rows to the Prospecting inbox">
+        <button onClick={() => sendToProspecting(rows)} className="px-3 py-1.5 text-xs font-medium bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 border border-blue-100 transition whitespace-nowrap" title="Send all rows to the Prospecting inbox">
           → Send all to Prospecting
         </button>
-        <button onClick={() => exportPipelineCsv(rows, enrichments, pipeline?.name || "pipeline")} className="px-3 py-1.5 text-xs font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition whitespace-nowrap" title="Download every row with all its data and enrichment as a CSV">
+        <button onClick={() => exportPipelineCsv(rows, enrichments, pipeline?.name || "pipeline")} className="px-3 py-1.5 text-xs font-medium bg-[#123B78] text-white rounded-lg hover:bg-[#0e2f60] transition whitespace-nowrap" title="Download every row with all its data and enrichment as a CSV">
           ⬇ Download data
         </button>
       </header>
@@ -468,6 +512,7 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
               <table className="w-full text-sm min-w-[900px]">
                 <thead className="bg-zinc-50 border-b border-zinc-200">
                   <tr>
+                    <th className="px-4 py-3 w-10"><input type="checkbox" checked={allSelected} onChange={toggleAllSel} className="h-4 w-4 rounded border-zinc-300 text-blue-600" /></th>
                     <th className="text-left px-4 py-3 font-medium text-zinc-700 w-10"></th>
                     <th className="text-left px-4 py-3 font-medium text-zinc-700">Name</th>
                     <th className="text-left px-4 py-3 font-medium text-zinc-700">Business</th>
@@ -493,7 +538,10 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
                     const lastLog = rowLogs[0];
                     return (
                       <Fragment key={r.id}>
-                        <tr className={`border-b border-zinc-100 transition-colors ${isBusy || personBusy === r.id ? "bg-blue-50/60" : ""}`}>
+                        <tr className={`border-b border-zinc-100 transition-colors ${selectedRows[r.id] ? "bg-blue-50/40" : ""} ${isBusy || personBusy === r.id ? "bg-blue-50/60" : ""}`}>
+                          <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                            <input type="checkbox" checked={!!selectedRows[r.id]} onChange={() => toggleRowSel(r.id)} className="h-4 w-4 rounded border-zinc-300 text-blue-600" />
+                          </td>
                           <td className="px-4 py-3 text-center">
                             {hasAnyResult && (
                               <button onClick={() => setExpandedId(isExpanded ? null : r.id)} className="text-zinc-400 hover:text-zinc-700">
@@ -537,32 +585,32 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
                             <div className="flex gap-2 justify-end">
                            {isHiring && (
                                 <>
-                                  <button onClick={() => sendToPool(r)} className="px-3 py-1 text-xs font-medium bg-teal-600 text-white rounded-md hover:bg-teal-700 transition" title="Create a talent pool for this company">
+                                  <button onClick={() => sendToPool(r)} className="px-3 py-1 text-xs font-medium bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 transition" title="Create a talent pool for this company">
                                     + Pool
                                   </button>
-                                  <button onClick={() => openContacts(r)} className="px-3 py-1 text-xs font-medium bg-cyan-600 text-white rounded-md hover:bg-cyan-700 transition" title="Find email contacts at this company">
+                                  <button onClick={() => openContacts(r)} className="px-3 py-1 text-xs font-medium bg-cyan-50 text-cyan-700 rounded-md hover:bg-cyan-100 transition" title="Find email contacts at this company">
                                     Find Contacts
                                   </button>
                                 </>
-                              )}  <button onClick={() => openLogOnly(r)} disabled={isBusy} className="px-3 py-1 text-xs font-medium border border-zinc-300 text-zinc-700 rounded-md hover:bg-zinc-50 transition disabled:opacity-40" title="Add a note to the outreach history">
+                              )}  <button onClick={() => openLogOnly(r)} disabled={isBusy} className="px-3 py-1 text-xs font-medium bg-zinc-100 text-zinc-600 rounded-md hover:bg-zinc-200 transition disabled:opacity-40" title="Add a note to the outreach history">
                                 + Log
                               </button>
-                              <button onClick={() => sendToProspecting([r])} className="px-3 py-1 text-xs font-medium bg-rose-600 text-white rounded-md hover:bg-rose-700 transition" title="Send this row to the Prospecting inbox">
+                              <button onClick={() => sendToProspecting([r])} className="px-3 py-1 text-xs font-medium bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 transition" title="Send this row to the Prospecting inbox">
                                 → Prospecting
                               </button>
-                              <button onClick={() => runNppes(r)} disabled={isBusy} className="px-3 py-1 text-xs font-medium bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition disabled:opacity-60 disabled:cursor-not-allowed" title="Free official registry lookup">
+                              <button onClick={() => runNppes(r)} disabled={isBusy} className="px-3 py-1 text-xs font-medium bg-emerald-50 text-emerald-700 rounded-md hover:bg-emerald-100 transition disabled:opacity-60 disabled:cursor-not-allowed" title="Free official registry lookup">
                                 {isBusy ? "..." : enr?.npi_status ? "NPPES ↻" : "NPPES"}
                               </button>
-                              <button onClick={() => runEnrich(r)} disabled={isBusy} className="px-3 py-1 text-xs font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed min-w-[80px]" title="Google Maps + website scrape">
+                              <button onClick={() => runEnrich(r)} disabled={isBusy} className="px-3 py-1 text-xs font-medium bg-sky-50 text-sky-700 rounded-md hover:bg-sky-100 transition disabled:opacity-60 disabled:cursor-not-allowed min-w-[80px]" title="Google Maps + website scrape">
                                 {isBusy ? (
                                   <span className="inline-flex items-center gap-1.5">
-                                    <span className="inline-block w-3 h-3 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                                    <span className="inline-block w-3 h-3 rounded-full border-2 border-sky-300 border-t-sky-600 animate-spin" />
                                     Working
                                   </span>
                                 ) : (enr?.status && enr.status !== "pending") ? "G-Maps ↻" : "G-Maps"}
                               </button>
                               {canSmartSearch && (
-                                <button onClick={() => runSmartSearch(r)} disabled={isBusy} className="px-3 py-1 text-xs font-medium bg-amber-500 text-white rounded-md hover:bg-amber-600 transition disabled:opacity-40 disabled:cursor-not-allowed" title="Rescue with Google Search">🔍</button>
+                                <button onClick={() => runSmartSearch(r)} disabled={isBusy} className="px-3 py-1 text-xs font-medium bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100 transition disabled:opacity-40 disabled:cursor-not-allowed" title="Rescue with Google Search">🔍</button>
                               )}
                               <button onClick={() => removeRow(r.id)} className="px-2 py-1 text-xs text-zinc-500 hover:text-red-500 transition">✕</button>
                             </div>
@@ -571,7 +619,7 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
 
                         {(isBusy || personBusy === r.id) && (
                           <tr className="bg-blue-50/60 border-b border-zinc-100">
-                            <td colSpan={8} className="px-6 py-2 text-xs text-blue-700">
+                            <td colSpan={9} className="px-6 py-2 text-xs text-blue-700">
                               <span className="inline-block w-2 h-2 bg-blue-500 rounded-full animate-pulse mr-2 align-middle" />
                               {busyStage || "Working..."}
                             </td>
@@ -580,19 +628,19 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
 
                         {!isBusy && enr?.status === "error" && enr.error_message && (
                           <tr className="bg-red-50/40 border-b border-zinc-100">
-                            <td colSpan={8} className="px-6 py-2 text-xs text-red-700">⚠️ {enr.error_message}</td>
+                            <td colSpan={9} className="px-6 py-2 text-xs text-red-700">⚠️ {enr.error_message}</td>
                           </tr>
                         )}
 
                         {!isBusy && enr?.status === "no_match" && (
                           <tr className="bg-red-50/40 border-b border-zinc-100">
-                            <td colSpan={8} className="px-6 py-2 text-xs text-red-700">⚠️ No match found on Google Maps. Try NPPES or 🔍 Smart Search.</td>
+                            <td colSpan={9} className="px-6 py-2 text-xs text-red-700">⚠️ No match found on Google Maps. Try NPPES or 🔍 Smart Search.</td>
                           </tr>
                         )}
 
                         {isExpanded && (
                           <tr className="bg-zinc-50/50">
-                            <td colSpan={8} className="px-6 py-4">
+                            <td colSpan={9} className="px-6 py-4">
                               {/* All original fields from the row */}
                               <div className="mb-5">
                                 <h4 className="font-semibold text-zinc-900 mb-2">All fields</h4>
@@ -780,6 +828,50 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
           )}
         </div>
       </main>
+
+      {selectedCount > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-zinc-900 text-white rounded-full shadow-2xl px-5 py-3 flex items-center gap-3 flex-wrap justify-center">
+          <span className="text-sm font-medium">{selectedCount} selected</span>
+          <select
+            value=""
+            onChange={(e) => { if (e.target.value) { setBulkNote(""); setBulkDialog({ newStatus: e.target.value }); } }}
+            className="text-xs font-medium border border-zinc-600 rounded-lg px-2 py-1.5 bg-zinc-800 text-white cursor-pointer focus:outline-none"
+          >
+            <option value="">Set status…</option>
+            {OUTREACH_STATUSES.map((s) => (<option key={s.value} value={s.value}>{s.label}</option>))}
+          </select>
+          <button onClick={() => { setBulkNote(""); setBulkDialog({ newStatus: null }); }} className="text-sm font-medium bg-blue-600 px-3 py-1.5 rounded-full hover:bg-blue-700 transition">+ Log to all</button>
+          <button onClick={() => sendToProspecting(rows.filter((r) => selectedRows[r.id]))} className="text-sm font-medium bg-rose-600 px-3 py-1.5 rounded-full hover:bg-rose-700 transition">→ Prospecting</button>
+          <button onClick={() => setSelectedRows({})} className="text-sm text-zinc-300 hover:text-white transition">Clear</button>
+        </div>
+      )}
+
+      {bulkDialog && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => !savingBulk && setBulkDialog(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-zinc-900">
+              {bulkDialog.newStatus
+                ? <>Set {selectedCount} to → <span style={{ color: statusMeta(bulkDialog.newStatus).color }}>{statusMeta(bulkDialog.newStatus).label}</span></>
+                : `Add a note to ${selectedCount} rows`}
+            </h2>
+            <p className="text-sm text-zinc-500">Saved to the outreach history for all {selectedCount} selected rows.</p>
+            <textarea
+              value={bulkNote}
+              onChange={(e) => setBulkNote(e.target.value)}
+              autoFocus
+              rows={3}
+              placeholder={bulkDialog.newStatus ? "Optional note for all selected…" : "e.g., left voicemail for all"}
+              className="w-full px-3 py-2 border border-zinc-300 rounded-lg bg-white text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            />
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={() => setBulkDialog(null)} disabled={savingBulk} className="px-4 py-2 text-sm text-zinc-600 hover:text-zinc-900 transition disabled:opacity-40">Cancel</button>
+              <button onClick={saveBulk} disabled={savingBulk || (!bulkDialog.newStatus && !bulkNote.trim())} className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-40 disabled:cursor-not-allowed">
+                {savingBulk ? "Saving…" : `Apply to ${selectedCount}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {logDialog && (
         <div className="fixed inset-0 z-40 bg-black/50 flex items-center justify-center p-4" onClick={() => !savingLog && setLogDialog(null)}>
