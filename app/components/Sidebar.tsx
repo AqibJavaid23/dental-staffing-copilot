@@ -119,11 +119,6 @@ export default function Sidebar({
             <ShieldCheck size={18} strokeWidth={1.75} className="shrink-0" />{!c && <span>Admin</span>}
           </Link>
         )}
-        {profile.role === "admin" && (
-          <Link href="/admin" onClick={nav} title={c ? "Admin" : undefined} className={`${rowBase} ${c ? "justify-center" : ""} hover:bg-zinc-100`} style={{ color: "#52525b" }}>
-            <ShieldCheck size={18} strokeWidth={1.75} className="shrink-0" />{!c && <span>Admin</span>}
-          </Link>
-        )}
         {profile.role !== "member" && (
           <Link href="/team" onClick={nav} title={c ? "Team" : undefined} className={`${rowBase} ${c ? "justify-center" : ""} hover:bg-zinc-100`} style={{ color: "#52525b" }}>
             <UserCog size={18} strokeWidth={1.75} className="shrink-0" />{!c && <span>Team</span>}
