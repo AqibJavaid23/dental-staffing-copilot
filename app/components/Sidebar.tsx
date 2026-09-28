@@ -7,11 +7,11 @@ import { signOut } from "@/app/lib/useAuth";
 import {
   LayoutDashboard, Stethoscope, Target, Upload, Search, GitBranch, Briefcase,
   Waypoints, ClipboardList, Users, Megaphone, MessageSquare, Mail, Workflow,
-  ArrowLeftRight, UserCog, LogOut, ChevronRight, ChevronDown,
+  ArrowLeftRight, UserCog, LogOut, ChevronRight, ChevronDown, ShieldCheck
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-type Prof = { id: string; role: string };
+type Prof = { id: string; role: string; is_platform_admin?: boolean };
 
 const NAV: { href: string; label: string; Icon: LucideIcon; exact?: boolean }[] = [
   { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard, exact: true },
@@ -114,6 +114,16 @@ export default function Sidebar({
         <Link href="/choose" onClick={nav} title={c ? "Switch" : undefined} className={`${rowBase} ${c ? "justify-center" : ""} hover:bg-zinc-100`} style={{ color: "var(--brand-blue)" }}>
           <ArrowLeftRight size={18} strokeWidth={1.75} className="shrink-0" />{!c && <span>Switch</span>}
         </Link>
+        {profile.is_platform_admin && (
+          <Link href="/admin" onClick={nav} title={c ? "Admin" : undefined} className={`${rowBase} ${c ? "justify-center" : ""} hover:bg-zinc-100`} style={{ color: "#52525b" }}>
+            <ShieldCheck size={18} strokeWidth={1.75} className="shrink-0" />{!c && <span>Admin</span>}
+          </Link>
+        )}
+        {profile.role === "admin" && (
+          <Link href="/admin" onClick={nav} title={c ? "Admin" : undefined} className={`${rowBase} ${c ? "justify-center" : ""} hover:bg-zinc-100`} style={{ color: "#52525b" }}>
+            <ShieldCheck size={18} strokeWidth={1.75} className="shrink-0" />{!c && <span>Admin</span>}
+          </Link>
+        )}
         {profile.role !== "member" && (
           <Link href="/team" onClick={nav} title={c ? "Team" : undefined} className={`${rowBase} ${c ? "justify-center" : ""} hover:bg-zinc-100`} style={{ color: "#52525b" }}>
             <UserCog size={18} strokeWidth={1.75} className="shrink-0" />{!c && <span>Team</span>}

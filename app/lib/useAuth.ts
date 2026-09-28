@@ -9,6 +9,8 @@ export type Profile = {
   email: string;
   full_name: string | null;
   role: "admin" | "manager" | "member";
+  organization_id?: string | null;
+  is_platform_admin?: boolean;
 };
 
 export function useAuth() {
