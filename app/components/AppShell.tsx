@@ -21,6 +21,7 @@ const SECTIONS: [string, string, boolean?][] = [
   ["/dashboard/prospecting", "Prospecting"],
   ["/pipelines", "Enrichment Pipelines"],
   ["/services", "Services"],
+   ["/work", "Work"],
   ["/admin", "Admin"],
   ["/team", "Team"],
   ["/clients", "Clients"],

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "@/app/lib/useAuth";
 import {
-  LayoutDashboard,Layers, Stethoscope, Target, Upload, Search, GitBranch, Briefcase,
+  LayoutDashboard,Layers,ListTodo, Stethoscope, Target, Upload, Search, GitBranch, Briefcase,
   Waypoints, ClipboardList, Users, Megaphone, MessageSquare, Mail, Workflow,
   ArrowLeftRight, UserCog, LogOut, ChevronRight, ChevronDown, ShieldCheck
 } from "lucide-react";
@@ -24,6 +24,7 @@ const NAV: { href: string; label: string; Icon: LucideIcon; exact?: boolean }[] 
   { href: "/dashboard/pools", label: "Pools", Icon: Waypoints },
   { href: "/dashboard/reports", label: "Reports", Icon: ClipboardList },
   { href: "/dashboard/groups", label: "Groups", Icon: Users },
+      { href: "/work", label: "Work", Icon: ListTodo },
   { href: "/services", label: "Services", Icon: Layers },
 ];
 const PROSPECT: { href: string; label: string; Icon: LucideIcon }[] = [
