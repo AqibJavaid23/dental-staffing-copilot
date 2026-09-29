@@ -24,7 +24,6 @@ const NAV: { href: string; label: string; Icon: LucideIcon; exact?: boolean }[] 
   { href: "/dashboard/pools", label: "Pools", Icon: Waypoints },
   { href: "/dashboard/reports", label: "Reports", Icon: ClipboardList },
   { href: "/dashboard/groups", label: "Groups", Icon: Users },
-  { href: "/dashboard/groups", label: "Groups", Icon: Users },
   { href: "/services", label: "Services", Icon: Layers },
 ];
 const PROSPECT: { href: string; label: string; Icon: LucideIcon }[] = [
