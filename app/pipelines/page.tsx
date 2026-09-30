@@ -165,6 +165,18 @@ function PipelinesInner() {
     loadUsers();
   }, [profile]);
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+
+  const renamePipeline = async (id: string) => {
+    const name = editName.trim();
+    if (!name) { setEditingId(null); return; }
+    const { error } = await supabase.from("pipelines").update({ name }).eq("id", id);
+    if (error) { alert("Rename failed: " + error.message); return; }
+    setPipelines((prev) => prev.map((p) => (p.id === id ? { ...p, name } : p)));
+    setEditingId(null);
+  };
+
   const deletePipeline = async (id: string, name: string) => {
     if (!confirm(`Delete pipeline "${name}"? This cannot be undone.`)) return;
     const { error } = await supabase.from("pipelines").delete().eq("id", id);
@@ -257,6 +269,15 @@ if (checking) return <div className="min-h-screen flex items-center justify-cent
                 return (
                   <div key={p.id} className="card-hover bg-white dark:bg-zinc-800 rounded-2xl shadow-sm border border-zinc-200 dark:border-zinc-700 p-5">
                     <div className="flex items-start justify-between gap-2 mb-3">
+                      {editingId === p.id ? (
+                        <div className="flex-1 min-w-0">
+                          <input value={editName} onChange={(e) => setEditName(e.target.value)} autoFocus onKeyDown={(e) => { if (e.key === "Enter") renamePipeline(p.id); if (e.key === "Escape") setEditingId(null); }} className="w-full px-2 py-1.5 border border-blue-400 rounded-lg text-sm font-semibold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                          <div className="flex gap-3 mt-1.5">
+                            <button onClick={() => renamePipeline(p.id)} className="text-xs font-medium text-blue-600 hover:text-blue-800">Save</button>
+                            <button onClick={() => setEditingId(null)} className="text-xs text-zinc-400 hover:text-zinc-600">Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
                       <Link href={`/pipelines/${p.id}`} className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${tag.classes}`}>{tag.label}</span>
@@ -270,8 +291,12 @@ if (checking) return <div className="min-h-screen flex items-center justify-cent
                         <h3 className="font-semibold text-zinc-900 dark:text-zinc-50 truncate hover:text-blue-600 dark:hover:text-blue-400 transition">{p.name}</h3>
                         <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{new Date(p.created_at).toLocaleDateString()}</p>
                       </Link>
+                      )}
                       <div className="flex flex-col items-end gap-1">
-                        <button onClick={() => deletePipeline(p.id, p.name)} className="text-zinc-400 hover:text-red-500 transition text-sm" title="Delete">✕</button>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => { setEditingId(p.id); setEditName(p.name); }} className="text-zinc-400 hover:text-blue-600 transition text-sm" title="Rename">✎</button>
+                          <button onClick={() => deletePipeline(p.id, p.name)} className="text-zinc-400 hover:text-red-500 transition text-sm" title="Delete">✕</button>
+                        </div>
                         <select
                           value={ptype}
                           onChange={(e) => changeType(p.id, e.target.value)}
