@@ -209,7 +209,7 @@ function PipelinesInner() {
     if (typeFilter === "mydata") return isUpload(p);
     if (typeFilter === "shared") return !!p.sharedByName || (p.sharedWithNames?.length ?? 0) > 0;
     return !isUpload(p) && typeOf(p) === typeFilter;
-  });
+  }).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 
 if (checking) return <div className="min-h-screen flex items-center justify-center bg-zinc-50"><BrandLoader label="Loading..." /></div>;
   return (

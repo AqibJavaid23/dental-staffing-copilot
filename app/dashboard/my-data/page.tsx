@@ -92,7 +92,7 @@ export default function MyDataPage() {
         });
       }
     }
-    return Array.from(map.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [rows]);
 
   const handleFile = async (file: File) => {
