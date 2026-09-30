@@ -147,6 +147,19 @@ export default function MyDataPage() {
     }
   };
 
+  const deleteRow = async (r: UploadRow) => {
+    if (!profile) return;
+    if (r.owner_id !== profile.id) { alert("You can only delete your own rows."); return; }
+    if (!confirm("Delete this row? This can't be undone.")) return;
+    try {
+      const { error } = await supabase.from("user_uploads").delete().eq("id", r.id);
+      if (error) throw error;
+      load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Delete failed");
+    }
+  };
+
   // Rows for the currently opened batch
   const openBatch = batches.find((b) => b.batchId === openBatchId) || null;
   const batchRows = useMemo(() => {
@@ -318,6 +331,7 @@ export default function MyDataPage() {
                         <th className="text-left px-4 py-3 font-medium text-zinc-700">Phone</th>
                         <th className="text-left px-4 py-3 font-medium text-zinc-700">Location</th>
                         <th className="text-left px-4 py-3 font-medium text-zinc-700">Status</th>
+                        <th className="px-4 py-3 w-10"></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -334,6 +348,9 @@ export default function MyDataPage() {
                             <td className="px-4 py-3 text-zinc-700 whitespace-nowrap">{d["Phone"] || "—"}</td>
                             <td className="px-4 py-3 text-zinc-700 whitespace-nowrap">{d["Location"] || "—"}</td>
                             <td className="px-4 py-3 text-zinc-700 whitespace-nowrap">{d["Status"] || "—"}</td>
+                            <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                              <button onClick={() => deleteRow(r)} className="text-zinc-400 hover:text-red-500 transition text-sm" title="Delete row">✕</button>
+                            </td>
                           </tr>
                         );
                       })}
