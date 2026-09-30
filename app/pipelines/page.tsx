@@ -45,6 +45,7 @@ function PipelinesInner() {
 
   // Talent / Hiring type filter
   const [typeFilter, setTypeFilter] = useState<"all" | "talent" | "hiring" | "mydata" | "shared">("all");
+  const [search, setSearch] = useState("");
 
   const { profile, checking } = useAuth();
 
@@ -201,7 +202,9 @@ function PipelinesInner() {
   const emptyLabel = "Go to Provider Database";
 
   const isUpload = (p: Pipeline) => p.source_tab === "Upload";
+  const q = search.trim().toLowerCase();
   const visiblePipelines = pipelines.filter((p) => {
+    if (q && !(p.name || "").toLowerCase().includes(q)) return false;
     if (typeFilter === "all") return true;
     if (typeFilter === "mydata") return isUpload(p);
     if (typeFilter === "shared") return !!p.sharedByName || (p.sharedWithNames?.length ?? 0) > 0;
@@ -246,6 +249,10 @@ if (checking) return <div className="min-h-screen flex items-center justify-cent
                 {label}
               </button>
             ))}
+          </div>
+
+          <div className="flex">
+            <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search pipelines by name…" className="w-full sm:w-72 px-3 py-1.5 border border-zinc-300 dark:border-zinc-600 rounded-lg text-sm bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
 
           {error ? <div className="p-6 text-red-500 bg-red-50 dark:bg-red-900/20 rounded-lg">{error}</div>

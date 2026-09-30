@@ -535,6 +535,16 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
     load();
   };
 
+  const [rowSearch, setRowSearch] = useState("");
+  const rq = rowSearch.trim().toLowerCase();
+  const filteredRows = rq
+    ? rows.filter((r) => {
+        const d = r.row_data;
+        const name = `${d["Name"] || ""} ${d["Full Name"] || ""} ${d["First Name"] || ""} ${d["Last Name"] || ""} ${d["Business Name"] || ""}`.toLowerCase();
+        return name.includes(rq);
+      })
+    : rows;
+
   const statusCounts = OUTREACH_STATUSES.map((s) => ({
     ...s,
     count: rows.filter((r) => (r.outreach_status || "to_contact") === s.value).length,
@@ -581,6 +591,12 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
             </div>
           )}
 
+          {!loading && rows.length > 0 && (
+            <div className="flex">
+              <input type="text" value={rowSearch} onChange={(e) => setRowSearch(e.target.value)} placeholder="Search this pipeline by name…" className="w-full sm:w-80 px-3 py-1.5 border border-zinc-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          )}
+
           {error ? <div className="p-6 text-red-500 bg-red-50 rounded-lg">{error}</div>
           : loading ? <BrandLoader label="Loading pipeline..." />
           : rows.length === 0 ? <div className="p-12 text-center text-zinc-400">This pipeline is empty.</div>
@@ -601,7 +617,7 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r) => {
+                  {filteredRows.map((r) => {
                     const d = r.row_data;
                     const enr = enrichments[(r.license_number || "").trim()];
                     const status = enr?.status || "pending";
