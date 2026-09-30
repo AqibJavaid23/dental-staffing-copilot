@@ -536,6 +536,7 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
   };
 
   const [rowSearch, setRowSearch] = useState("");
+  const [azSort, setAzSort] = useState(false);
   const rq = rowSearch.trim().toLowerCase();
   const filteredRows = rq
     ? rows.filter((r) => {
@@ -544,6 +545,12 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
         return name.includes(rq);
       })
     : rows;
+
+  const rowName = (r: PipelineRow) => {
+    const d = r.row_data;
+    return `${d["Name"] || ""} ${d["Full Name"] || ""} ${d["First Name"] || ""} ${d["Last Name"] || ""} ${d["Business Name"] || ""}`.trim().toLowerCase();
+  };
+  const displayRows = azSort ? [...filteredRows].sort((a, b) => rowName(a).localeCompare(rowName(b))) : filteredRows;
 
   const statusCounts = OUTREACH_STATUSES.map((s) => ({
     ...s,
@@ -592,8 +599,14 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
           )}
 
           {!loading && rows.length > 0 && (
-            <div className="flex">
+            <div className="flex items-center">
               <input type="text" value={rowSearch} onChange={(e) => setRowSearch(e.target.value)} placeholder="Search this pipeline by name…" className="w-full sm:w-80 px-3 py-1.5 border border-zinc-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <button onClick={() => setAzSort((v) => !v)} className="ml-3 inline-flex items-center gap-2 text-sm text-zinc-600 shrink-0" title="Sort rows A–Z by name">
+                <span className={`relative inline-block w-9 h-5 rounded-full transition-colors ${azSort ? "bg-blue-600" : "bg-zinc-300"}`}>
+                  <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${azSort ? "left-4" : "left-0.5"}`} />
+                </span>
+                A–Z
+              </button>
             </div>
           )}
 
@@ -617,7 +630,7 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredRows.map((r) => {
+                  {displayRows.map((r) => {
                     const d = r.row_data;
                     const enr = enrichments[(r.license_number || "").trim()];
                     const status = enr?.status || "pending";
