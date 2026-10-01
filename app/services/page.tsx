@@ -70,11 +70,14 @@ export default function ServicesPage() {
                 <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400 mb-3">{g.department}</h2>
                 <div className="space-y-3">
                   {g.items.map((s) => (
-                    <div key={s.id} className={`bg-white rounded-2xl border border-zinc-200 p-5 ${s.status === "archived" ? "opacity-60" : ""}`}>
+                    <div key={s.id} className={`bg-white rounded-2xl border border-zinc-200 p-5 ${s.status === "archived" || s.status === "draft" ? "opacity-60" : ""}`}>
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="font-semibold text-zinc-900">{s.name}</h3>
                         {s.status === "archived" && (
                           <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-500">Archived</span>
+                        )}
+                        {s.status === "draft" && (
+                          <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Not live yet</span>
                         )}
                       </div>
                       {s.description && <p className="mt-1 text-sm text-zinc-500 leading-relaxed">{s.description}</p>}

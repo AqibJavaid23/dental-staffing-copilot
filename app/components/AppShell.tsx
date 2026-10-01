@@ -25,6 +25,7 @@ const SECTIONS: [string, string, boolean?][] = [
   ["/admin", "Admin"],
   ["/team", "Team"],
   ["/clients", "Clients"],
+  ["/requests", "Requests"],
 ];
 function titleFor(path: string): string {
   let best = ""; let bestLen = -1;
