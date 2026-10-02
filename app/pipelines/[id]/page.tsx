@@ -537,14 +537,17 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
 
   const [rowSearch, setRowSearch] = useState("");
   const [azSort, setAzSort] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const rq = rowSearch.trim().toLowerCase();
-  const filteredRows = rq
-    ? rows.filter((r) => {
-        const d = r.row_data;
-        const name = `${d["Name"] || ""} ${d["Full Name"] || ""} ${d["First Name"] || ""} ${d["Last Name"] || ""} ${d["Business Name"] || ""}`.toLowerCase();
-        return name.includes(rq);
-      })
-    : rows;
+  const filteredRows = rows.filter((r) => {
+    if (statusFilter && (r.outreach_status || "to_contact") !== statusFilter) return false;
+    if (rq) {
+      const d = r.row_data;
+      const name = `${d["Name"] || ""} ${d["Full Name"] || ""} ${d["First Name"] || ""} ${d["Last Name"] || ""} ${d["Business Name"] || ""}`.toLowerCase();
+      if (!name.includes(rq)) return false;
+    }
+    return true;
+  });
 
   const rowName = (r: PipelineRow) => {
     const d = r.row_data;
@@ -589,12 +592,21 @@ export default function PipelineDetailPage({ params }: { params: Promise<{ id: s
         <div className="max-w-7xl mx-auto space-y-5">
           {!loading && rows.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {statusCounts.map((s) => (
-                <span key={s.value} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-zinc-200 rounded-full text-xs font-medium text-zinc-700 shadow-sm">
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
-                  {s.label}: {s.count}
-                </span>
-              ))}
+              {statusCounts.map((s) => {
+                const active = statusFilter === s.value;
+                return (
+                  <button
+                    key={s.value}
+                    onClick={() => setStatusFilter(active ? null : s.value)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium shadow-sm transition cursor-pointer ${active ? "text-white" : "bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-50"}`}
+                    style={active ? { backgroundColor: s.color, borderColor: s.color } : undefined}
+                    title={active ? "Click to clear filter" : `Show only ${s.label}`}
+                  >
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: active ? "#ffffff" : s.color }} />
+                    {s.label}: {s.count}
+                  </button>
+                );
+              })}
             </div>
           )}
 
